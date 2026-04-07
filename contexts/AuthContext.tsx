@@ -38,6 +38,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const currentUser = session?.user ?? null
       setUser(currentUser)
       setIsAdmin(await checkAdmin(currentUser))
+    }).catch(() => {}).finally(() => {
       setLoading(false)
     })
 
@@ -45,7 +46,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       const currentUser = session?.user ?? null
       setUser(currentUser)
-      setIsAdmin(await checkAdmin(currentUser))
+      checkAdmin(currentUser).then(setIsAdmin).catch(() => setIsAdmin(false))
       setLoading(false)
     })
 
