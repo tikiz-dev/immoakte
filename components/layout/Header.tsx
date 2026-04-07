@@ -4,9 +4,12 @@ import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import { ClipboardCheck } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
+import { usePathname } from 'next/navigation'
 
 export default function Header() {
   const { user } = useAuth()
+  const pathname = usePathname()
+  const onPricing = pathname === '/pricing'
 
   return (
     <header className="flex items-center justify-between p-6">
@@ -15,7 +18,10 @@ export default function Header() {
         <span className="text-xl font-bold">Protokoll-Pro</span>
       </Link>
       <div className="flex items-center gap-4">
-        <Link href="/pricing" className="text-sm font-medium text-slate-600 hover:text-slate-900 mr-4">
+        <Link
+          href="/pricing"
+          className={`text-sm font-medium mr-4 ${onPricing ? 'text-primary font-semibold' : 'text-slate-600 hover:text-slate-900'}`}
+        >
           Preise
         </Link>
         {user ? (

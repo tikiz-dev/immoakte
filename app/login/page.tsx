@@ -8,7 +8,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
-import Header from '@/components/layout/Header'
+import Link from 'next/link'
+import { ClipboardCheck } from 'lucide-react'
 import { useEffect, Suspense } from 'react'
 
 function LoginForm() {
@@ -58,7 +59,12 @@ function LoginForm() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <Header />
+      <header className="flex items-center justify-center p-6">
+        <Link href="/" className="flex items-center gap-2">
+          <ClipboardCheck className="h-7 w-7 text-primary" />
+          <span className="text-xl font-bold">Protokoll-Pro</span>
+        </Link>
+      </header>
       <div className="flex items-center justify-center p-4">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
