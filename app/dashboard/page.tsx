@@ -203,15 +203,15 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-slate-50 pb-12">
-      <header className="bg-white shadow-sm">
-        <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-4">
-          <div className="flex items-center gap-2">
-            <FileText className="h-6 w-6 text-primary" />
-            <h1 className="text-xl font-bold">Protokoll-Pro</h1>
+      <header className="bg-white shadow-sm sticky top-0 z-20">
+        <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
+          <div className="flex items-center gap-2 shrink-0">
+            <FileText className="h-5 w-5 text-primary" />
+            <h1 className="text-base font-bold">Protokoll-Pro</h1>
           </div>
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" onClick={() => router.push('/pricing')} className="text-sm font-medium text-slate-600 hover:text-slate-900">
-              Preise &amp; Abos
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="sm" onClick={() => router.push('/pricing')} className="hidden sm:inline-flex text-sm font-medium text-slate-600">
+              Preise
             </Button>
             {isAdmin && (
               <div className="relative">
@@ -246,7 +246,7 @@ export default function Dashboard() {
                 </div>
               </DialogContent>
             </Dialog>
-            <span className="text-sm text-muted-foreground hidden sm:inline-block">
+            <span className="text-sm text-muted-foreground hidden sm:inline-block max-w-[120px] truncate">
               {userName || user?.email}
             </span>
             <Button variant="ghost" size="icon" onClick={logout} title="Abmelden">
@@ -256,8 +256,8 @@ export default function Dashboard() {
         </div>
       </header>
 
-      <main className="mx-auto mt-8 max-w-5xl px-4">
-        <div className="mb-8 flex items-center justify-between">
+      <main className="mx-auto mt-6 max-w-5xl px-4 w-full">
+        <div className="mb-6 flex items-center justify-between">
           <h2 className="text-2xl font-bold tracking-tight">Meine Protokolle</h2>
           <Button onClick={() => router.push('/protocol/new')}>
             <Plus className="mr-2 h-4 w-4" />
@@ -284,7 +284,7 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
             {tenancies.map((group) => (
               <Card key={group.id} className="hover:border-primary/50 transition-colors flex flex-col">
                 <CardHeader className="pb-2">
@@ -309,13 +309,15 @@ export default function Dashboard() {
                         </div>
                         <div className="flex items-center gap-2">
                           <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                            group.einzug.status === 'final' ? 'bg-green-200 text-green-800' : 'bg-amber-200 text-amber-800'
+                            group.einzug.finalized_at ? 'bg-green-200 text-green-800' : 'bg-amber-200 text-amber-800'
                           }`}>
-                            {group.einzug.status === 'final' ? 'Fertig' : 'Entwurf'}
+                            {group.einzug.finalized_at ? 'Abgeschlossen' : 'Entwurf'}
                           </span>
-                          <Button variant="ghost" size="sm" className="h-7 px-2 text-destructive" onClick={(e) => { e.stopPropagation(); confirmDelete(group.einzug!.id) }}>
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
+                          {!group.einzug.finalized_at && (
+                            <Button variant="ghost" size="sm" className="h-7 px-2 text-destructive" onClick={(e) => { e.stopPropagation(); confirmDelete(group.einzug!.id) }}>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
                         </div>
                       </div>
                     )}
@@ -331,17 +333,19 @@ export default function Dashboard() {
                         </div>
                         <div className="flex items-center gap-2">
                           <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                            group.auszug.status === 'final' ? 'bg-green-200 text-green-800' : 'bg-amber-200 text-amber-800'
+                            group.auszug.finalized_at ? 'bg-green-200 text-green-800' : 'bg-amber-200 text-amber-800'
                           }`}>
-                            {group.auszug.status === 'final' ? 'Fertig' : 'Entwurf'}
+                            {group.auszug.finalized_at ? 'Abgeschlossen' : 'Entwurf'}
                           </span>
-                          <Button variant="ghost" size="sm" className="h-7 px-2 text-destructive" onClick={(e) => { e.stopPropagation(); confirmDelete(group.auszug!.id) }}>
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
+                          {!group.auszug.finalized_at && (
+                            <Button variant="ghost" size="sm" className="h-7 px-2 text-destructive" onClick={(e) => { e.stopPropagation(); confirmDelete(group.auszug!.id) }}>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
                         </div>
                       </div>
                     ) : (
-                      group.einzug && group.einzug.status === 'final' && (
+                      group.einzug && group.einzug.finalized_at && (
                         <Button variant="outline" size="sm" className="w-full mt-2 border-dashed" onClick={() => createAuszug(group.einzug!)}>
                           <Plus className="mr-2 h-3 w-3" />
                           Auszugsprotokoll erstellen

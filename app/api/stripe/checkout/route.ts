@@ -14,16 +14,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Nicht authentifiziert' }, { status: 401 })
     }
 
-    const { priceId, mode } = await request.json()
+    const { priceId, mode, protocolId } = await request.json()
+
+    const successUrl = protocolId
+      ? `${request.nextUrl.origin}/protocol/${protocolId}?finalized=true`
+      : `${request.nextUrl.origin}/dashboard?payment=success`
 
     const session = await stripe.checkout.sessions.create({
       customer_email: user.email,
       line_items: [{ price: priceId, quantity: 1 }],
       mode: mode || 'subscription',
-      success_url: `${request.nextUrl.origin}/dashboard?payment=success`,
-      cancel_url: `${request.nextUrl.origin}/pricing?payment=cancelled`,
+      success_url: successUrl,
+      cancel_url: `${request.nextUrl.origin}/protocol/${protocolId || ''}`,
       metadata: {
         userId: user.id,
+        ...(protocolId ? { protocolId } : {}),
       },
     })
 

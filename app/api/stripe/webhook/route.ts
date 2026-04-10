@@ -27,7 +27,12 @@ export async function POST(request: NextRequest) {
     case 'checkout.session.completed': {
       const session = event.data.object as Stripe.Checkout.Session
       const userId = session.metadata?.userId
-      if (userId) {
+      const protocolId = session.metadata?.protocolId
+
+      if (!userId) break
+
+      // Abo-Kauf (Pro-Plan)
+      if (session.mode === 'subscription') {
         await supabaseAdmin
           .from('users')
           .update({
@@ -35,6 +40,18 @@ export async function POST(request: NextRequest) {
             subscription_status: 'active',
           })
           .eq('id', userId)
+      }
+
+      // Einmalkauf (On-Demand) → Protokoll sperren
+      if (session.mode === 'payment' && protocolId) {
+        await supabaseAdmin
+          .from('protocols')
+          .update({
+            finalized_at: new Date().toISOString(),
+            status: 'final',
+          })
+          .eq('id', protocolId)
+          .eq('owner_id', userId)
       }
       break
     }

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { createClient } from '@/lib/supabase/client'
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -14,7 +14,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { toast } from 'sonner'
-import { ArrowLeft, Camera, CheckCircle, FileText, Plus, Trash2 } from 'lucide-react'
+import { ArrowLeft, Camera, CheckCircle, Droplets, FileText, Flame, Home, Key, Lock, Plus, Thermometer, Trash2, Zap } from 'lucide-react'
 import { SignaturePad } from '@/components/SignaturePad'
 import { PrintableProtocol } from '@/components/PrintableProtocol'
 import { format } from 'date-fns'
@@ -35,6 +35,7 @@ export default function ProtocolView() {
   const id = params.id as string
   const { user } = useAuth()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const supabase = createClient()
   const [protocol, setProtocol] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -44,6 +45,7 @@ export default function ProtocolView() {
   const [propertyAddress, setPropertyAddress] = useState('')
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false)
+  const [isCheckoutLoading, setIsCheckoutLoading] = useState(false)
   const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({})
 
   useEffect(() => {
@@ -93,6 +95,16 @@ export default function ProtocolView() {
 
     fetchData()
   }, [id, user])
+
+  // Nach Stripe-Zahlung: PDF automatisch generieren
+  useEffect(() => {
+    if (searchParams.get('finalized') === 'true' && protocol && !loading) {
+      setActiveTab('finish')
+      setTimeout(() => generatePDF(), 500)
+      // Query-Parameter entfernen
+      router.replace(`/protocol/${id}`)
+    }
+  }, [searchParams, protocol, loading])
 
   const saveProtocol = async (updatedData: any) => {
     if (!id) return
@@ -259,7 +271,7 @@ export default function ProtocolView() {
     router.push('/dashboard')
   }
 
-  const generatePDF = async () => {
+  const handleFinalize = async () => {
     if (!areAllRoomsValid()) {
       toast.error('Bitte füllen Sie alle Pflichtfelder bei den Mängeln aus (Beschreibung & mind. ein Foto pro Mangel).')
       setActiveTab('rooms')
@@ -270,6 +282,47 @@ export default function ProtocolView() {
       setActiveTab('meters')
       return
     }
+
+    setIsCheckoutLoading(true)
+    try {
+      // Versuchen kostenlos oder mit Pro abzuschließen
+      const res = await fetch('/api/finalize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ protocolId: id }),
+      })
+
+      if (res.ok) {
+        // Kostenloses oder Pro → direkt PDF generieren
+        setProtocol((prev: any) => ({ ...prev, finalized_at: new Date().toISOString(), status: 'final' }))
+        await generatePDF()
+      } else {
+        const data = await res.json()
+        if (data.error === 'payment_required') {
+          // Stripe Checkout starten
+          const checkoutRes = await fetch('/api/stripe/checkout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_ONDEMAND,
+              mode: 'payment',
+              protocolId: id,
+            }),
+          })
+          const { url } = await checkoutRes.json()
+          if (url) window.location.href = url
+        } else {
+          toast.error('Fehler beim Abschließen')
+        }
+      }
+    } catch {
+      toast.error('Fehler beim Abschließen')
+    } finally {
+      setIsCheckoutLoading(false)
+    }
+  }
+
+  const generatePDF = async () => {
     try {
       toast.loading('Generiere PDF... Bitte warten.', { id: 'pdf-gen' })
 
@@ -359,47 +412,76 @@ export default function ProtocolView() {
     }
   }
 
-  if (loading) return <div className="flex h-screen items-center justify-center">Lade...</div>
+  if (loading) return (
+    <div className="flex h-screen items-center justify-center flex-col gap-3">
+      <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      <p className="text-sm text-muted-foreground">Lade Protokoll...</p>
+    </div>
+  )
   if (!protocol) return null
+
+  const isFinalized = !!protocol.finalized_at
+  const tenantName = `${protocol.tenant_salutation ? protocol.tenant_salutation + ' ' : ''}${protocol.tenant_first_name} ${protocol.tenant_last_name}`.trim()
+
+  const METER_ICONS: Record<string, React.ReactNode> = {
+    Strom: <Zap className="h-4 w-4 text-yellow-500" />,
+    Wasser: <Droplets className="h-4 w-4 text-blue-500" />,
+    Gas: <Flame className="h-4 w-4 text-orange-500" />,
+    Heizung: <Thermometer className="h-4 w-4 text-red-500" />,
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 pb-20">
-      <header className="bg-white shadow-sm sticky top-0 z-10">
-        <div className="mx-auto flex h-16 max-w-3xl items-center px-4">
-          <Button variant="ghost" size="icon" onClick={() => router.push('/dashboard')} className="mr-2">
+      <header className="bg-white shadow-sm sticky top-0 z-20">
+        <div className="mx-auto flex h-14 max-w-3xl items-center gap-2 px-4">
+          <Button variant="ghost" size="icon" onClick={() => router.push('/dashboard')} className="shrink-0">
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <h1 className="text-lg font-bold truncate">
-            {protocol.tenant_salutation} {protocol.tenant_first_name} {protocol.tenant_last_name} - {protocol.type}
-          </h1>
-          <div className="ml-auto flex items-center gap-2">
-            <Button variant="ghost" size="icon" onClick={() => setIsDeleteDialogOpen(true)} className="text-destructive">
-              <Trash2 className="h-5 w-5" />
-            </Button>
-            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-              protocol.status === 'final' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'
+          <div className="flex-1 min-w-0">
+            <p className="text-base font-bold leading-tight truncate">{tenantName}</p>
+            <p className="text-xs text-muted-foreground truncate">
+              {protocol.type} {propertyAddress ? `· ${propertyAddress}` : ''}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {!protocol.finalized_at && (
+              <Button variant="ghost" size="icon" onClick={() => setIsDeleteDialogOpen(true)} className="text-destructive">
+                <Trash2 className="h-5 w-5" />
+              </Button>
+            )}
+            <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold whitespace-nowrap ${
+              protocol.finalized_at ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'
             }`}>
-              {protocol.status === 'final' ? 'Abgeschlossen' : 'Entwurf'}
+              {protocol.finalized_at ? <><Lock className="h-3 w-3" /> Abgeschlossen</> : 'Entwurf'}
             </span>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto mt-6 max-w-3xl px-4">
+      <main className="mx-auto max-w-3xl px-4">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-4 mb-6">
-            <TabsTrigger value="rooms" className="text-xs sm:text-sm">Räume</TabsTrigger>
-            <TabsTrigger value="meters" className="text-xs sm:text-sm">Zähler</TabsTrigger>
-            <TabsTrigger value="keys" className="text-xs sm:text-sm">Schlüssel</TabsTrigger>
-            <TabsTrigger value="finish" className="text-xs sm:text-sm">Abschluss</TabsTrigger>
-          </TabsList>
+          <div className="sticky top-14 z-10 bg-slate-50 pt-2 pb-2 border-b border-slate-200 mb-4">
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="rooms" className="text-xs sm:text-sm">Räume</TabsTrigger>
+              <TabsTrigger value="meters" className="text-xs sm:text-sm">Zähler</TabsTrigger>
+              <TabsTrigger value="keys" className="text-xs sm:text-sm">Schlüssel</TabsTrigger>
+              <TabsTrigger value="finish" className="text-xs sm:text-sm">Abschluss</TabsTrigger>
+            </TabsList>
+          </div>
+
+          {isFinalized && (
+            <div className="flex items-center gap-2 rounded-lg bg-green-50 border border-green-200 px-4 py-3 mb-4 text-sm text-green-800">
+              <Lock className="h-4 w-4 shrink-0" />
+              <span>Dieses Protokoll ist abgeschlossen und kann nicht mehr bearbeitet werden.</span>
+            </div>
+          )}
 
           {/* ROOMS TAB */}
           <TabsContent value="rooms" className="space-y-4">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold">Zimmer-Inspektion</h2>
+            <div className="flex justify-between items-center mb-2">
+              <p className="text-sm text-muted-foreground font-medium">Zustand der einzelnen Räume erfassen</p>
               <DropdownMenu>
-                <DropdownMenuTrigger className={buttonVariants({ size: 'sm' })}>
+                <DropdownMenuTrigger className={buttonVariants({ size: 'sm' })} disabled={isFinalized}>
                   <Plus className="h-4 w-4 mr-1" /> Raum
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
@@ -416,13 +498,17 @@ export default function ProtocolView() {
             </div>
 
             {(!protocol.rooms || protocol.rooms.length === 0) && (
-              <div className="text-center py-8 text-muted-foreground border rounded-lg border-dashed">
-                Noch keine Räume erfasst.
+              <div className="flex flex-col items-center justify-center py-12 text-center border-2 border-dashed rounded-xl bg-white">
+                <div className="mb-3 rounded-full bg-slate-100 p-3">
+                  <Home className="h-6 w-6 text-slate-400" />
+                </div>
+                <p className="font-medium text-slate-600">Noch keine Räume erfasst</p>
+                <p className="text-sm text-muted-foreground mt-1">Klicken Sie auf „+ Raum" um zu beginnen</p>
               </div>
             )}
 
             {protocol.rooms?.map((room: any) => (
-              <Card key={room.id} className="mb-4">
+              <Card key={room.id} className={`mb-4 overflow-hidden border-l-4 ${room.condition === 'Nicht okay' ? 'border-l-red-400' : 'border-l-emerald-400'}`}>
                 <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
                   <div className="relative flex-1 mr-4">
                     <Input
@@ -553,29 +639,38 @@ export default function ProtocolView() {
 
           {/* METERS TAB */}
           <TabsContent value="meters" className="space-y-4">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold">Zählerstände</h2>
-              <Button onClick={addMeter} size="sm"><Plus className="h-4 w-4 mr-1" /> Zähler</Button>
+            <div className="flex justify-between items-center mb-2">
+              <p className="text-sm text-muted-foreground font-medium">Aktuelle Zählerstände dokumentieren</p>
+              <Button onClick={addMeter} size="sm" disabled={isFinalized}><Plus className="h-4 w-4 mr-1" /> Zähler</Button>
             </div>
 
             {(!protocol.meters || protocol.meters.length === 0) && (
-              <div className="text-center py-8 text-muted-foreground border rounded-lg border-dashed">Noch keine Zähler erfasst.</div>
+              <div className="flex flex-col items-center justify-center py-12 text-center border-2 border-dashed rounded-xl bg-white">
+                <div className="mb-3 rounded-full bg-slate-100 p-3">
+                  <Zap className="h-6 w-6 text-slate-400" />
+                </div>
+                <p className="font-medium text-slate-600">Noch keine Zähler erfasst</p>
+                <p className="text-sm text-muted-foreground mt-1">Strom, Wasser, Gas & Heizung hinzufügen</p>
+              </div>
             )}
 
             {protocol.meters?.map((meter: any) => (
               <Card key={meter.id} className="mb-4">
                 <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
-                  <Select value={meter.type} onValueChange={(v) => updateMeter(meter.id, 'type', v)}>
-                    <SelectTrigger className="w-[150px] font-semibold border-none shadow-none px-0 focus:ring-0">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Strom">Strom</SelectItem>
-                      <SelectItem value="Wasser">Wasser</SelectItem>
-                      <SelectItem value="Gas">Gas</SelectItem>
-                      <SelectItem value="Heizung">Heizung</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <div className="flex items-center gap-2">
+                    {METER_ICONS[meter.type] || <Zap className="h-4 w-4 text-slate-400" />}
+                    <Select value={meter.type} onValueChange={(v) => updateMeter(meter.id, 'type', v)}>
+                      <SelectTrigger className="w-[140px] font-semibold border-none shadow-none px-0 focus:ring-0">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Strom">Strom</SelectItem>
+                        <SelectItem value="Wasser">Wasser</SelectItem>
+                        <SelectItem value="Gas">Gas</SelectItem>
+                        <SelectItem value="Heizung">Heizung</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <Button variant="ghost" size="icon" onClick={() => deleteMeter(meter.id)} className="text-destructive">
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -642,13 +737,19 @@ export default function ProtocolView() {
 
           {/* KEYS TAB */}
           <TabsContent value="keys" className="space-y-4">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold">Schlüsselübergabe</h2>
-              <Button onClick={addKey} size="sm"><Plus className="h-4 w-4 mr-1" /> Schlüssel</Button>
+            <div className="flex justify-between items-center mb-2">
+              <p className="text-sm text-muted-foreground font-medium">Übergebene Schlüssel festhalten</p>
+              <Button onClick={addKey} size="sm" disabled={isFinalized}><Plus className="h-4 w-4 mr-1" /> Schlüssel</Button>
             </div>
 
             {(!protocol.keys || protocol.keys.length === 0) && (
-              <div className="text-center py-8 text-muted-foreground border rounded-lg border-dashed">Noch keine Schlüssel erfasst.</div>
+              <div className="flex flex-col items-center justify-center py-12 text-center border-2 border-dashed rounded-xl bg-white">
+                <div className="mb-3 rounded-full bg-slate-100 p-3">
+                  <Key className="h-6 w-6 text-slate-400" />
+                </div>
+                <p className="font-medium text-slate-600">Noch keine Schlüssel erfasst</p>
+                <p className="text-sm text-muted-foreground mt-1">Haustür, Briefkasten, Keller etc. hinzufügen</p>
+              </div>
             )}
 
             {protocol.keys?.map((key: any) => (
@@ -682,7 +783,7 @@ export default function ProtocolView() {
 
           {/* FINISH TAB */}
           <TabsContent value="finish" className="space-y-6">
-            <h2 className="text-xl font-semibold mb-4">Abschluss & Unterschrift</h2>
+            <p className="text-sm text-muted-foreground font-medium mb-2">Unterschriften einholen &amp; Protokoll abschließen</p>
 
             <Card>
               <CardContent className="pt-6 space-y-6">
@@ -743,19 +844,37 @@ export default function ProtocolView() {
                 </div>
 
                 <div className="border-t pt-6">
-                  <Button
-                    className="w-full" size="lg"
-                    onClick={generatePDF}
-                    disabled={!protocol.landlord_signature || !protocol.tenant_signature || !areAllRoomsValid() || !areAllMetersValid()}
-                  >
-                    <FileText className="mr-2 h-5 w-5" />
-                    PDF Generieren & Abschließen
-                  </Button>
-                  {(!protocol.landlord_signature || !protocol.tenant_signature) && (
-                    <p className="text-xs text-center text-muted-foreground mt-2">Beide Unterschriften werden benötigt.</p>
-                  )}
-                  {(!areAllRoomsValid() || !areAllMetersValid()) && (
-                    <p className="text-xs text-center text-destructive mt-2">Bitte füllen Sie alle Pflichtfelder aus (Mängeldetails & Zählerdaten).</p>
+                  {protocol.finalized_at ? (
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="flex items-center gap-2 text-green-700 font-semibold">
+                        <Lock className="h-5 w-5" />
+                        Protokoll abgeschlossen & gesperrt
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Abgeschlossen am {new Date(protocol.finalized_at).toLocaleDateString('de-DE')}
+                      </p>
+                      <Button variant="outline" className="w-full" onClick={generatePDF}>
+                        <FileText className="mr-2 h-5 w-5" />
+                        PDF erneut herunterladen
+                      </Button>
+                    </div>
+                  ) : (
+                    <>
+                      <Button
+                        className="w-full" size="lg"
+                        onClick={handleFinalize}
+                        disabled={!protocol.landlord_signature || !protocol.tenant_signature || !areAllRoomsValid() || !areAllMetersValid() || isCheckoutLoading}
+                      >
+                        <FileText className="mr-2 h-5 w-5" />
+                        {isCheckoutLoading ? 'Wird verarbeitet...' : 'PDF Generieren & Abschließen'}
+                      </Button>
+                      {(!protocol.landlord_signature || !protocol.tenant_signature) && (
+                        <p className="text-xs text-center text-muted-foreground mt-2">Beide Unterschriften werden benötigt.</p>
+                      )}
+                      {(!areAllRoomsValid() || !areAllMetersValid()) && (
+                        <p className="text-xs text-center text-destructive mt-2">Bitte füllen Sie alle Pflichtfelder aus (Mängeldetails & Zählerdaten).</p>
+                      )}
+                    </>
                   )}
                 </div>
               </CardContent>

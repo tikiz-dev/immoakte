@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { createClient } from '@/lib/supabase/client'
@@ -14,11 +14,15 @@ import { ArrowLeft, ArrowRight, Loader2 } from 'lucide-react'
 import { AddressAutocomplete } from '@/components/AddressAutocomplete'
 
 export default function NewProtocol() {
-  const { user } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   const router = useRouter()
   const supabase = createClient()
   const [loading, setLoading] = useState(false)
   const [step, setStep] = useState(1)
+
+  useEffect(() => {
+    if (!authLoading && !user) router.replace('/login')
+  }, [user, authLoading])
 
   const [formData, setFormData] = useState({
     tenantSalutation: 'Herr',
@@ -105,7 +109,7 @@ export default function NewProtocol() {
     }
   }
 
-  if (!user) { router.replace('/login'); return null }
+  if (!user) return null
 
   return (
     <div className="min-h-screen bg-slate-50 py-12 px-4 sm:px-6 lg:px-8">

@@ -50,7 +50,7 @@ export default function Pricing() {
           </p>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
           <Card className="flex flex-col">
             <CardHeader>
               <CardTitle className="text-2xl">Free / Test</CardTitle>
@@ -136,7 +136,7 @@ export default function Pricing() {
 
         <div className="mt-16 text-center text-slate-500">
           <p>Alle Preise verstehen sich zzgl. der gesetzlichen Mehrwertsteuer.</p>
-          <p className="mt-2">Benötigen Sie eine Lösung für Ihr ganzes Team? <a href="#" className="text-primary hover:underline">Kontaktieren Sie uns für den Business-Tarif.</a></p>
+          <p className="mt-2">Benötigen Sie eine Lösung für Ihr ganzes Team? <a href="mailto:hallo@protokoll-pro.de" className="text-primary hover:underline">Kontaktieren Sie uns für den Business-Tarif.</a></p>
         </div>
       </main>
     </div>
