@@ -160,21 +160,9 @@ export default function ProtocolView() {
       const url = await handlePhotoUpload(file)
       updateMeter(meterId, 'photoUrl', url)
       toast.success('Foto hochgeladen', { id: `upload-${meterId}` })
-
-      toast.loading('Analysiere Bild auf Zählerstand...', { id: `ocr-${meterId}` })
-      const Tesseract = await import('tesseract.js')
-      const result = await Tesseract.recognize(file, 'deu', { logger: m => console.log(m) })
-      const numberMatch = result.data.text.match(/\b\d{4,7}(?:[.,]\d{1,2})?\b/)
-      if (numberMatch) {
-        updateMeterLocal(meterId, 'reading', numberMatch[0])
-        updateMeter(meterId, 'reading', numberMatch[0])
-        toast.success(`Zählerstand erkannt: ${numberMatch[0]}`, { id: `ocr-${meterId}` })
-      } else {
-        toast.info('Konnte keinen eindeutigen Zählerstand erkennen. Bitte manuell eintragen.', { id: `ocr-${meterId}` })
-      }
     } catch (error) {
-      console.error('Error uploading meter photo or running OCR:', error)
-      toast.error('Fehler beim Hochladen oder Analysieren des Fotos', { id: `upload-${meterId}` })
+      console.error('Error uploading meter photo:', error)
+      toast.error('Fehler beim Hochladen des Fotos', { id: `upload-${meterId}` })
     }
   }
 
