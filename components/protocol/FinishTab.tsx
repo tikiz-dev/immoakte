@@ -21,7 +21,7 @@ interface FinishTabProps {
   saveProtocol: (data: any) => Promise<void>
   setProtocol: (updater: any) => void
   onFinalize: () => Promise<void>
-  onGeneratePDF: (uploadAndStore?: boolean) => Promise<void>
+  onGeneratePDF: (uploadAndStore?: boolean, protocolOverride?: any) => Promise<void>
 }
 
 export function FinishTab({

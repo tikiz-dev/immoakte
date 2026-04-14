@@ -269,6 +269,10 @@ export default function ProtocolView() {
 
     await saveProtocol({ landlord_signature: landlordSig, tenant_signature: tenantSig })
 
+    // Signaturen direkt ins lokale Objekt mergen — React-State-Update ist async,
+    // daher übergeben wir das aktualisierte Protokoll explizit an generatePDF
+    const protocolWithSigs = { ...protocol, landlord_signature: landlordSig, tenant_signature: tenantSig }
+
     setIsCheckoutLoading(true)
     try {
       const res = await fetch('/api/finalize', {
@@ -279,7 +283,7 @@ export default function ProtocolView() {
 
       if (res.ok) {
         setProtocol((prev: any) => ({ ...prev, finalized_at: new Date().toISOString(), status: 'final' }))
-        await generatePDF(true)
+        await generatePDF(true, protocolWithSigs)
         if (protocol.tenant_email) setIsEmailDialogOpen(true)
         else router.push('/dashboard')
       } else {
@@ -369,7 +373,7 @@ export default function ProtocolView() {
     } catch { return false }
   }
 
-  const generatePDF = async (uploadAndStore = false) => {
+  const generatePDF = async (uploadAndStore = false, protocolOverride?: any) => {
     if (protocol?.pdf_url && !uploadAndStore) {
       const ok = await downloadStoredPDF()
       if (ok) return
@@ -378,7 +382,9 @@ export default function ProtocolView() {
     try {
       toast.loading('Generiere PDF... Bitte warten.', { id: 'pdf-gen' })
       toast.loading('Lade Bilder...', { id: 'pdf-gen' })
-      const preparedProtocol = await prepareProtocolImages(protocol)
+      // protocolOverride verwenden wenn vorhanden (z.B. direkt nach handleFinalize,
+      // bevor React den State aktualisiert hat)
+      const preparedProtocol = await prepareProtocolImages(protocolOverride ?? protocol)
 
       const container = document.createElement('div')
       container.style.cssText = 'position:absolute;left:-9999px;top:0;background:#fff;'
