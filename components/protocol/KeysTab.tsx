@@ -60,10 +60,20 @@ export function KeysTab({ protocol, isFinalized, saveProtocol, setProtocol }: Ke
             <div className="w-24 space-y-2">
               <Label>Anzahl</Label>
               <Input
-                type="number" min="1"
-                value={key.count}
-                onChange={(e) => updateKeyLocal(key.id, 'count', parseInt(e.target.value) || 0)}
-                onBlur={(e) => updateKey(key.id, 'count', parseInt(e.target.value) || 0)}
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={String(key.count)}
+                onFocus={(e) => e.target.select()}
+                onChange={(e) => {
+                  const raw = e.target.value.replace(/[^0-9]/g, '')
+                  updateKeyLocal(key.id, 'count', raw)
+                }}
+                onBlur={(e) => {
+                  const val = Math.max(1, parseInt(String(key.count)) || 1)
+                  updateKeyLocal(key.id, 'count', val)
+                  updateKey(key.id, 'count', val)
+                }}
               />
             </div>
             <Button variant="ghost" size="icon" onClick={() => deleteKey(key.id)} className="text-destructive mt-6">
