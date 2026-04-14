@@ -20,7 +20,7 @@ const TYPE_LABELS: Record<string, string> = {
   wohnungsgeberbestaetigung: 'Wohnungsgeberbestätigung',
   mietvertrag: 'Mietvertrag',
   kautionsbescheinigung: 'Kautionsbescheinigung',
-  sonstiges: 'Sonstiges Dokument',
+  sonstiges: 'Leeres Dokument',
 }
 
 export default function DocumentPage() {
@@ -78,7 +78,8 @@ export default function DocumentPage() {
 
   const handleDelete = async () => {
     if (!confirm('Dokument wirklich löschen?')) return
-    await fetch(`/api/documents/${id}`, { method: 'DELETE' })
+    const res = await fetch(`/api/documents/${id}`, { method: 'DELETE' })
+    if (!res.ok) { toast.error('Fehler beim Löschen'); return }
     toast.success('Dokument gelöscht')
     router.push('/dashboard')
   }

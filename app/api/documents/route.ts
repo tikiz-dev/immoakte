@@ -109,6 +109,12 @@ export async function POST(request: NextRequest) {
     '{{kaution}}': '',
   }
 
+  // Validate type
+  const validTypes = Object.keys(DEFAULT_TEMPLATES)
+  if (!type || !validTypes.includes(type)) {
+    return NextResponse.json({ error: 'Ungültiger Dokumenttyp' }, { status: 400 })
+  }
+
   // Get template content
   const templateKey = type as keyof typeof DEFAULT_TEMPLATES
   const templateDef = DEFAULT_TEMPLATES[templateKey]

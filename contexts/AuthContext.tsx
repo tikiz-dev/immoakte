@@ -30,7 +30,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .select('role')
         .eq('id', currentUser.id)
         .single()
-      return profile?.role === 'admin' || currentUser.email === 'info@weserbergland-dienstleistungen.de'
+      return profile?.role === 'admin'
     }
 
     // Load initial session immediately

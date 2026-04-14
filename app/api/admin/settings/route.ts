@@ -18,6 +18,9 @@ async function requireAdmin() {
 }
 
 export async function GET() {
+  const admin = await requireAdmin()
+  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   try {
     const { data, error } = await supabaseAdmin
       .from('app_settings').select('key, value')

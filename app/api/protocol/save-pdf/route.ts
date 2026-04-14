@@ -30,6 +30,13 @@ export async function POST(request: NextRequest) {
     if (!pdfBlob || !protocolId) {
       return NextResponse.json({ error: 'Fehlende Parameter' }, { status: 400 })
     }
+    if (pdfBlob.type && pdfBlob.type !== 'application/pdf') {
+      return NextResponse.json({ error: 'Ungültiger Dateityp' }, { status: 400 })
+    }
+    const MAX_PDF_SIZE = 50 * 1024 * 1024 // 50 MB
+    if (pdfBlob.size > MAX_PDF_SIZE) {
+      return NextResponse.json({ error: 'PDF zu groß (max. 50 MB)' }, { status: 413 })
+    }
 
     // Verify ownership
     const { data: protocol } = await supabaseAdmin

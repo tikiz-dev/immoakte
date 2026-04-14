@@ -171,6 +171,9 @@ export default function ProtocolView() {
   }
 
   const handlePhotoUpload = async (file: File): Promise<string> => {
+    if (file.size > 20 * 1024 * 1024) {
+      throw new Error('Bild zu groß (max. 20 MB)')
+    }
     return new Promise((resolve, reject) => {
       const reader = new FileReader()
       reader.onload = (e) => {

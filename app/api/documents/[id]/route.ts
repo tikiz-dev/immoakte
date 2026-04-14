@@ -35,7 +35,13 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (!existing || existing.owner_id !== user.id)
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const updates = await request.json()
+  const body = await request.json()
+  // Only allow safe user-editable fields — never owner_id, tenancy_id, etc.
+  const allowed = ['name', 'content', 'status', 'finalized_at'] as const
+  const updates: Partial<Record<typeof allowed[number], unknown>> = {}
+  for (const key of allowed) {
+    if (key in body) updates[key] = body[key]
+  }
   const { error } = await supabaseAdmin
     .from('documents').update(updates).eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
