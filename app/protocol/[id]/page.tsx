@@ -5,10 +5,11 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Badge } from '@/components/ui/badge'
+import { Tabs, TabsContent } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { toast } from 'sonner'
-import { ArrowLeft, Lock, Trash2 } from 'lucide-react'
+import { ArrowLeft, Trash2, Home, Gauge, Key, FileSignature, Check, MapPin } from 'lucide-react'
 import { SignaturePad, type SignaturePadHandle } from '@/components/SignaturePad'
 import { PrintableProtocol } from '@/components/PrintableProtocol'
 import { format } from 'date-fns'
@@ -491,39 +492,122 @@ export default function ProtocolView() {
     )
   }
 
+  // Step progress derivation
+  const steps: Array<{ key: string; label: string; icon: any; done: boolean }> = [
+    {
+      key: 'rooms',
+      label: 'Räume',
+      icon: Home,
+      done: (protocol.rooms || []).length > 0 && (protocol.rooms || []).every((r: any) =>
+        r.condition === 'Alles okay' || (r.defects?.length && r.defects.every((d: any) => d.description?.trim() && d.photoUrls?.length))
+      ),
+    },
+    {
+      key: 'meters',
+      label: 'Zähler',
+      icon: Gauge,
+      done: (protocol.meters || []).length > 0 && (protocol.meters || []).every((m: any) => m.number?.trim() && m.reading?.trim() && m.photoUrl?.length),
+    },
+    {
+      key: 'keys',
+      label: 'Schlüssel',
+      icon: Key,
+      done: (protocol.keys || []).length > 0,
+    },
+    {
+      key: 'finish',
+      label: 'Signatur',
+      icon: FileSignature,
+      done: !landlordSigEmpty && !tenantSigEmpty,
+    },
+  ]
+  const currentIndex = steps.findIndex(s => s.key === activeTab)
+  const completedCount = steps.filter(s => s.done).length
+
   return (
-    <div className="min-h-screen bg-slate-50 pb-20">
-      <header className="bg-white shadow-sm sticky top-0 z-20">
-        <div className="mx-auto flex h-14 max-w-3xl items-center gap-2 px-4">
-          <Button variant="ghost" size="icon" onClick={() => router.push('/dashboard')} className="shrink-0">
-            <ArrowLeft className="h-5 w-5" />
+    <div className="min-h-screen bg-background pb-24">
+      {/* Top nav bar */}
+      <header className="sticky top-0 z-20 bg-background/85 backdrop-blur-xl border-b border-border">
+        <div className="mx-auto flex h-14 max-w-3xl items-center gap-3 px-4">
+          <Button variant="ghost" size="icon" onClick={() => router.push(`/tenancy/${protocol.tenancy_id || ''}`.replace(/\/$/, '') || '/dashboard')} className="shrink-0" title="Zurück">
+            <ArrowLeft className="h-4 w-4" />
           </Button>
-          <div className="flex-1 min-w-0">
-            <p className="text-base font-bold leading-tight truncate">{tenantName}</p>
-            <p className="text-xs text-muted-foreground truncate">
-              {protocol.type}{propertyAddress ? ` · ${propertyAddress}` : ''}
-            </p>
+          <div className="flex-1 min-w-0 flex items-center gap-2">
+            <p className="text-xs text-muted-foreground uppercase tracking-[0.14em] font-semibold shrink-0">{protocol.type === 'Einzug' ? 'Einzug' : 'Auszug'}</p>
+            <span className="text-muted-foreground/40">·</span>
+            <p className="text-sm text-foreground truncate">{tenantName}</p>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <Button variant="ghost" size="icon" onClick={() => setIsDeleteDialogOpen(true)} className="text-destructive">
-              <Trash2 className="h-5 w-5" />
-            </Button>
-            <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold whitespace-nowrap bg-amber-100 text-amber-800">
-              Entwurf
-            </span>
-          </div>
+          <Badge variant="draft" size="sm">Entwurf</Badge>
+          <Button variant="ghost" size="icon" onClick={() => setIsDeleteDialogOpen(true)} className="text-muted-foreground hover:text-destructive shrink-0" title="Löschen">
+            <Trash2 className="h-4 w-4" />
+          </Button>
         </div>
       </header>
 
       <main className="mx-auto max-w-3xl px-4">
+        {/* Hero with address + progress */}
+        <section className="pt-6 pb-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brass-600">{protocol.type}sprotokoll</p>
+          <h1 className="font-heading text-2xl md:text-3xl text-foreground mt-1 leading-tight">{tenantName}</h1>
+          {propertyAddress && (
+            <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
+              <MapPin className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">{propertyAddress}</span>
+            </p>
+          )}
+        </section>
+
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <div className="sticky top-14 z-10 bg-slate-50 pt-2 pb-2 border-b border-slate-200 mb-4">
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="rooms" className="text-xs sm:text-sm">Räume</TabsTrigger>
-              <TabsTrigger value="meters" className="text-xs sm:text-sm">Zähler</TabsTrigger>
-              <TabsTrigger value="keys" className="text-xs sm:text-sm">Schlüssel</TabsTrigger>
-              <TabsTrigger value="finish" className="text-xs sm:text-sm">Abschluss</TabsTrigger>
-            </TabsList>
+          {/* Custom stepper */}
+          <div className="sticky top-14 z-10 bg-background/90 backdrop-blur-md pt-3 pb-4 -mx-4 px-4 border-b border-border mb-6">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-medium text-muted-foreground">
+                Schritt {currentIndex + 1} von {steps.length}
+                {completedCount > 0 && <span className="ml-2 text-emerald-700">· {completedCount} erledigt</span>}
+              </p>
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              {steps.map((step, i) => {
+                const active = step.key === activeTab
+                const done = step.done
+                const Icon = step.icon
+                return (
+                  <button
+                    key={step.key}
+                    onClick={() => setActiveTab(step.key)}
+                    className="group flex flex-col items-center gap-1.5 text-center"
+                  >
+                    <div className="relative w-full">
+                      <div
+                        className={`h-1 rounded-full transition-all ${
+                          done ? 'bg-emerald-500' : active ? 'bg-ink-700' : i < currentIndex ? 'bg-brass-400' : 'bg-border'
+                        }`}
+                      />
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <div
+                        className={`h-6 w-6 rounded-full flex items-center justify-center transition-all ${
+                          done
+                            ? 'bg-emerald-500 text-white'
+                            : active
+                              ? 'bg-ink-700 text-background'
+                              : 'bg-muted text-muted-foreground'
+                        }`}
+                      >
+                        {done ? <Check className="h-3 w-3" /> : <Icon className="h-3 w-3" />}
+                      </div>
+                      <span
+                        className={`text-[11px] sm:text-xs font-medium truncate ${
+                          active ? 'text-foreground' : 'text-muted-foreground'
+                        }`}
+                      >
+                        {step.label}
+                      </span>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
           </div>
 
           <TabsContent value="rooms" className="space-y-4">

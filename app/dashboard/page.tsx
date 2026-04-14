@@ -1,17 +1,24 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
-import { Plus, FileText, LogOut, Settings, ShieldCheck } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Logo } from '@/components/brand/Logo'
+import { ThemeToggle } from '@/components/ThemeToggle'
+import {
+  Plus, LogOut, Settings, ShieldCheck, FileText, Archive,
+  CircleCheck, Clock, Search,
+} from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
 import { TenancyCard } from '@/components/dashboard/TenancyCard'
+import { cn } from '@/lib/utils'
 
 interface Protocol {
   id: string
@@ -46,6 +53,8 @@ interface TenancyGroup {
   auszug?: Protocol
 }
 
+type FilterMode = 'all' | 'active' | 'closed'
+
 export default function Dashboard() {
   const { user, isAdmin, logout } = useAuth()
   const router = useRouter()
@@ -67,6 +76,8 @@ export default function Dashboard() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [protocolToDelete, setProtocolToDelete] = useState<string | null>(null)
   const [unresolvedFeedbackCount, setUnresolvedFeedbackCount] = useState(0)
+  const [filter, setFilter] = useState<FilterMode>('all')
+  const [search, setSearch] = useState('')
 
   useEffect(() => {
     if (!user) { router.replace('/login'); return }
@@ -95,7 +106,6 @@ export default function Dashboard() {
       setUnresolvedFeedbackCount(count || 0)
     }
 
-    // Fetch tenancies (primary source of truth) and protocols in parallel
     const [tenanciesRes, protocolsRes] = await Promise.all([
       fetch('/api/tenancies').then(r => r.json()),
       supabase.from('protocols').select('*').eq('owner_id', user!.id).order('created_at', { ascending: false }),
@@ -187,27 +197,67 @@ export default function Dashboard() {
     }
   }
 
+  const stats = useMemo(() => {
+    const total = tenancies.length
+    const active = tenancies.filter(t =>
+      (t.einzug && !t.auszug?.finalized_at) ||
+      (!t.einzug && !t.auszug)
+    ).length
+    const closed = tenancies.filter(t => t.auszug?.finalized_at).length
+    const drafts = tenancies.filter(t =>
+      (t.einzug && !t.einzug.finalized_at) || (t.auszug && !t.auszug.finalized_at)
+    ).length
+    return { total, active, closed, drafts }
+  }, [tenancies])
+
+  const filtered = useMemo(() => {
+    return tenancies.filter(t => {
+      if (filter === 'active' && t.auszug?.finalized_at) return false
+      if (filter === 'closed' && !t.auszug?.finalized_at) return false
+      if (search.trim()) {
+        const q = search.toLowerCase()
+        return (
+          t.tenantName.toLowerCase().includes(q) ||
+          (t.propertyAddress || '').toLowerCase().includes(q)
+        )
+      }
+      return true
+    })
+  }, [tenancies, filter, search])
+
   if (!user) return null
 
+  const displayName = userName || user?.email?.split('@')[0] || ''
+  const firstName = displayName.split(/\s+/)[0]
+
   return (
-    <div className="min-h-screen bg-slate-50 pb-12">
-      <header className="bg-white shadow-sm sticky top-0 z-20">
-        <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
-          <div className="flex items-center gap-2">
-            <FileText className="h-5 w-5 text-primary" />
-            <h1 className="text-base font-bold">ImmoAkte</h1>
+    <div className="min-h-screen bg-background pb-24">
+      {/* Header */}
+      <header className="sticky top-0 z-30 bg-background/80 backdrop-blur-xl border-b border-border/60">
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
+          <div className="flex items-center gap-5">
+            <Logo size={26} />
+            <nav className="hidden md:flex items-center gap-1">
+              <button className="px-3 py-1.5 rounded-md text-sm font-medium text-foreground bg-muted">
+                Dashboard
+              </button>
+              <button
+                onClick={() => router.push('/pricing')}
+                className="px-3 py-1.5 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+              >
+                Preise
+              </button>
+            </nav>
           </div>
+
           <div className="flex items-center gap-1">
-            <Button variant="ghost" size="sm" onClick={() => router.push('/pricing')} className="hidden sm:inline-flex text-sm font-medium text-slate-600">
-              Preise
-            </Button>
             {isAdmin && (
               <div className="relative">
                 <Button variant="ghost" size="icon" title="Admin" onClick={() => router.push('/admin')}>
-                  <ShieldCheck className="h-5 w-5 text-primary" />
+                  <ShieldCheck className="h-4 w-4 text-brass-600" />
                 </Button>
                 {unresolvedFeedbackCount > 0 && (
-                  <span className="absolute top-0 right-0 -mt-1 -mr-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
+                  <span className="absolute top-0.5 right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-background">
                     {unresolvedFeedbackCount}
                   </span>
                 )}
@@ -215,136 +265,239 @@ export default function Dashboard() {
             )}
             <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
               <DialogTrigger render={<Button variant="ghost" size="icon" title="Stammdaten" />}>
-                <Settings className="h-5 w-5" />
+                <Settings className="h-4 w-4" />
               </DialogTrigger>
-              <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-                <DialogHeader><DialogTitle>Stammdaten</DialogTitle></DialogHeader>
-                <div className="space-y-5 py-4">
-                  {/* Person / Firma */}
-                  <div className="space-y-3">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Person &amp; Firma</p>
-                    <div className="space-y-2">
-                      <Label>Ihr Name (Vermieter/Verwalter)</Label>
-                      <Input value={userName} onChange={e => setUserName(e.target.value)} placeholder="Max Mustermann" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Firma <span className="text-muted-foreground text-xs">(optional)</span></Label>
-                      <Input value={userCompany} onChange={e => setUserCompany(e.target.value)} placeholder="Immobilien GmbH" />
-                    </div>
-                  </div>
+              <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle className="font-heading text-2xl">Stammdaten</DialogTitle>
+                  <DialogDescription>
+                    Diese Angaben erscheinen automatisch in Ihren Protokollen und Dokumenten.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-6 py-4">
+                  <Fieldset title="Person & Firma">
+                    <FormRow>
+                      <FormField label="Ihr Name (Vermieter/Verwalter)">
+                        <Input value={userName} onChange={e => setUserName(e.target.value)} placeholder="Max Mustermann" />
+                      </FormField>
+                    </FormRow>
+                    <FormRow>
+                      <FormField label="Firma" hint="optional">
+                        <Input value={userCompany} onChange={e => setUserCompany(e.target.value)} placeholder="Immobilien GmbH" />
+                      </FormField>
+                    </FormRow>
+                  </Fieldset>
 
-                  {/* Adresse */}
-                  <div className="space-y-3 border-t pt-4">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Ihre Adresse</p>
-                    <div className="grid grid-cols-3 gap-2">
-                      <div className="col-span-2 space-y-2">
-                        <Label>Straße</Label>
+                  <Fieldset title="Ihre Adresse">
+                    <FormRow cols={3}>
+                      <FormField label="Straße" span={2}>
                         <Input value={userStreet} onChange={e => setUserStreet(e.target.value)} placeholder="Musterstraße" />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Hausnr.</Label>
+                      </FormField>
+                      <FormField label="Hausnr.">
                         <Input value={userHouseNumber} onChange={e => setUserHouseNumber(e.target.value)} placeholder="1a" />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2">
-                      <div className="space-y-2">
-                        <Label>PLZ</Label>
+                      </FormField>
+                    </FormRow>
+                    <FormRow cols={3}>
+                      <FormField label="PLZ">
                         <Input value={userZipCode} onChange={e => setUserZipCode(e.target.value)} placeholder="12345" />
-                      </div>
-                      <div className="col-span-2 space-y-2">
-                        <Label>Ort</Label>
+                      </FormField>
+                      <FormField label="Ort" span={2}>
                         <Input value={userCity} onChange={e => setUserCity(e.target.value)} placeholder="Musterstadt" />
-                      </div>
-                    </div>
-                  </div>
+                      </FormField>
+                    </FormRow>
+                  </Fieldset>
 
-                  {/* Kontakt */}
-                  <div className="space-y-3 border-t pt-4">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Kontakt</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="space-y-2">
-                        <Label>Telefon</Label>
+                  <Fieldset title="Kontakt">
+                    <FormRow cols={2}>
+                      <FormField label="Telefon">
                         <Input value={userPhone} onChange={e => setUserPhone(e.target.value)} placeholder="+49 123 456789" />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>E-Mail</Label>
+                      </FormField>
+                      <FormField label="E-Mail">
                         <Input type="email" value={userEmailContact} onChange={e => setUserEmailContact(e.target.value)} placeholder="max@beispiel.de" />
-                      </div>
-                    </div>
-                  </div>
+                      </FormField>
+                    </FormRow>
+                  </Fieldset>
 
-                  {/* Bankverbindung */}
-                  <div className="space-y-3 border-t pt-4">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Bankverbindung</p>
-                    <div className="space-y-2">
-                      <Label>IBAN</Label>
-                      <Input value={userIban} onChange={e => setUserIban(e.target.value)} placeholder="DE12 3456 7890 1234 5678 90" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Bank <span className="text-muted-foreground text-xs">(optional)</span></Label>
-                      <Input value={userBankName} onChange={e => setUserBankName(e.target.value)} placeholder="Musterbank" />
-                    </div>
-                  </div>
+                  <Fieldset title="Bankverbindung">
+                    <FormRow>
+                      <FormField label="IBAN">
+                        <Input value={userIban} onChange={e => setUserIban(e.target.value)} placeholder="DE12 3456 7890 1234 5678 90" />
+                      </FormField>
+                    </FormRow>
+                    <FormRow>
+                      <FormField label="Bank" hint="optional">
+                        <Input value={userBankName} onChange={e => setUserBankName(e.target.value)} placeholder="Musterbank" />
+                      </FormField>
+                    </FormRow>
+                  </Fieldset>
 
-                  <Button onClick={saveSettings} className="w-full">Speichern</Button>
+                  <Button onClick={saveSettings} className="w-full h-10">Speichern</Button>
                 </div>
               </DialogContent>
             </Dialog>
-            <span className="text-sm text-muted-foreground hidden sm:inline-block max-w-[120px] truncate">
-              {userName || user?.email}
-            </span>
+            <ThemeToggle compact />
             <Button variant="ghost" size="icon" onClick={logout} title="Abmelden">
-              <LogOut className="h-5 w-5" />
+              <LogOut className="h-4 w-4" />
             </Button>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto mt-6 max-w-5xl px-4 w-full">
-        <div className="mb-6 flex items-center justify-between">
-          <h2 className="text-2xl font-bold tracking-tight">Meine Protokolle</h2>
-          <Button onClick={() => router.push('/tenancy/new')}>
-            <Plus className="mr-2 h-4 w-4" /> Neues Mietverhältnis
+      <main className="mx-auto mt-10 max-w-6xl px-4 sm:px-6 motion-page-in">
+        {/* Greeting */}
+        <div className="mb-8">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-brass-600 mb-2">
+            Willkommen zurück
+          </p>
+          <h1 className="font-heading text-4xl sm:text-5xl tracking-tight text-foreground leading-[1.05]">
+            Guten Tag{firstName ? `, ${firstName}` : ''}.
+          </h1>
+          <p className="mt-2 text-muted-foreground max-w-xl">
+            Ihre Mieter-Akten auf einen Blick. Alles, was Sie für ein ordentliches Protokoll brauchen — in drei Klicks.
+          </p>
+        </div>
+
+        {/* Bento stats */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-10">
+          <StatCard
+            label="Mietverhältnisse"
+            value={stats.total}
+            icon={Archive}
+            tone="ink"
+            loading={loading}
+            style={{ '--stagger-i': 0 } as React.CSSProperties}
+            className="motion-fade-up"
+          />
+          <StatCard
+            label="Aktiv"
+            value={stats.active}
+            icon={Clock}
+            tone="brass"
+            loading={loading}
+            style={{ '--stagger-i': 1 } as React.CSSProperties}
+            className="motion-fade-up"
+          />
+          <StatCard
+            label="Abgeschlossen"
+            value={stats.closed}
+            icon={CircleCheck}
+            tone="emerald"
+            loading={loading}
+            className="col-span-2 sm:col-span-1 motion-fade-up"
+            style={{ '--stagger-i': 2 } as React.CSSProperties}
+          />
+        </div>
+
+        {/* Toolbar: title + action + filters */}
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-5">
+          <div>
+            <h2 className="font-heading text-2xl text-foreground">Meine Akten</h2>
+            <p className="text-sm text-muted-foreground">
+              {filtered.length} {filtered.length === 1 ? 'Mietverhältnis' : 'Mietverhältnisse'}
+              {search && ` · Suche: „${search}"`}
+            </p>
+          </div>
+          <Button onClick={() => router.push('/tenancy/new')} className="h-10 shrink-0 shadow-ink">
+            <Plus className="mr-1.5 h-4 w-4" />
+            Neues Mietverhältnis
           </Button>
         </div>
 
+        {/* Filter + search row */}
+        {tenancies.length > 0 && (
+          <div className="flex flex-col sm:flex-row gap-3 mb-6">
+            <div className="flex items-center gap-1 p-1 rounded-xl bg-muted/60 border border-border w-fit">
+              {[
+                { k: 'all' as const,    label: 'Alle',          count: stats.total },
+                { k: 'active' as const, label: 'Aktiv',         count: stats.active },
+                { k: 'closed' as const, label: 'Abgeschlossen', count: stats.closed },
+              ].map(({ k, label, count }) => (
+                <button
+                  key={k}
+                  onClick={() => setFilter(k)}
+                  className={cn(
+                    'px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-2',
+                    filter === k
+                      ? 'bg-card text-foreground shadow-xs'
+                      : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  {label}
+                  <span className={cn(
+                    'text-[11px] rounded-full px-1.5 h-4 min-w-[16px] inline-flex items-center justify-center',
+                    filter === k ? 'bg-brass-100 text-brass-800 dark:bg-brass-900/40 dark:text-brass-200' : 'bg-background text-muted-foreground'
+                  )}>
+                    {count}
+                  </span>
+                </button>
+              ))}
+            </div>
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Mieter oder Adresse suchen…"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="w-full h-10 pl-9 pr-3 rounded-xl bg-card border border-border text-sm placeholder:text-muted-foreground focus:outline-none focus:border-brass-400 focus:ring-2 focus:ring-brass-400/20 transition-colors"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Content */}
         {loading ? (
-          <div className="text-center text-muted-foreground py-12">Lade Protokolle...</div>
-        ) : tenancies.length === 0 ? (
-          <Card className="border-dashed">
-            <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-              <div className="mb-4 rounded-full bg-primary/10 p-3">
-                <FileText className="h-6 w-6 text-primary" />
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+            {[0, 1, 2].map(i => (
+              <div key={i} className="rounded-2xl border border-border bg-card p-5 space-y-4">
+                <div className="flex gap-3">
+                  <Skeleton className="h-11 w-11 rounded-xl" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-3.5 w-24" />
+                    <Skeleton className="h-5 w-40" />
+                    <Skeleton className="h-3 w-32" />
+                  </div>
+                </div>
+                <Skeleton className="h-14 w-full rounded-lg" />
+                <Skeleton className="h-9 w-full rounded-lg" />
               </div>
-              <h3 className="mb-1 text-lg font-semibold">Keine Protokolle vorhanden</h3>
-              <p className="mb-4 text-sm text-muted-foreground max-w-sm">
-                Erstellen Sie Ihr erstes Übergabeprotokoll — kostenlos und in Minuten erledigt.
-              </p>
-              <Button onClick={() => router.push('/tenancy/new')}>
-                <Plus className="mr-2 h-4 w-4" /> Erstes Mietverhältnis erstellen
-              </Button>
-            </CardContent>
-          </Card>
+            ))}
+          </div>
+        ) : tenancies.length === 0 ? (
+          <EmptyState onCreate={() => router.push('/tenancy/new')} />
+        ) : filtered.length === 0 ? (
+          <div className="text-center py-16">
+            <p className="text-muted-foreground">
+              Keine Treffer für die aktuelle Auswahl.
+            </p>
+            <Button variant="ghost" onClick={() => { setFilter('all'); setSearch('') }} className="mt-3">
+              Filter zurücksetzen
+            </Button>
+          </div>
         ) : (
           <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-            {tenancies.map(group => (
-              <TenancyCard
+            {filtered.map((group, idx) => (
+              <div
                 key={group.id}
-                group={group}
-                userId={user.id}
-                onDelete={confirmDelete}
-                onDuplicate={duplicateTenancy}
-                onOpenTenancy={(g) => {
-                  // Navigate to tenancy hub — use tenancyId if available, else einzug id
-                  const tenancyId = g.tenancyId || g.einzug?.id
-                  if (tenancyId) router.push(`/tenancy/${tenancyId}`)
-                }}
-                onAuszugCreated={(auszug) => {
-                  setTenancies(prev => prev.map(g =>
-                    g.id === group.id ? { ...g, auszug } : g
-                  ))
-                }}
-              />
+                className="motion-fade-up hover-lift"
+                style={{ '--stagger-i': idx } as React.CSSProperties}
+              >
+                <TenancyCard
+                  group={group}
+                  userId={user.id}
+                  onDelete={confirmDelete}
+                  onDuplicate={duplicateTenancy}
+                  onOpenTenancy={(g) => {
+                    const tenancyId = g.tenancyId || g.einzug?.id
+                    if (tenancyId) router.push(`/tenancy/${tenancyId}`)
+                  }}
+                  onAuszugCreated={(auszug) => {
+                    setTenancies(prev => prev.map(g =>
+                      g.id === group.id ? { ...g, auszug } : g
+                    ))
+                  }}
+                />
+              </div>
             ))}
           </div>
         )}
@@ -364,6 +517,115 @@ export default function Dashboard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
+
+/* ---- local helpers ---- */
+
+function StatCard({
+  label, value, icon: Icon, tone, loading, className, style,
+}: {
+  label: string
+  value: number
+  icon: React.ComponentType<{ className?: string }>
+  tone: 'ink' | 'brass' | 'emerald'
+  loading?: boolean
+  className?: string
+  style?: React.CSSProperties
+}) {
+  const toneStyles = {
+    ink:     { pill: 'bg-ink-50 text-ink-700 dark:bg-ink-800 dark:text-brass-300', ring: 'from-ink-400/20' },
+    brass:   { pill: 'bg-brass-100 text-brass-700 dark:bg-brass-900/40 dark:text-brass-300', ring: 'from-brass-400/30' },
+    emerald: { pill: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300', ring: 'from-emerald-400/20' },
+  }[tone]
+  return (
+    <div className={cn(
+      'relative overflow-hidden rounded-2xl border border-border bg-card p-5 shadow-xs hover:shadow-md transition-all',
+      className
+    )} style={style}>
+      <div className={cn('absolute -top-10 -right-10 h-32 w-32 rounded-full bg-gradient-to-br blur-2xl pointer-events-none opacity-60', toneStyles.ring, 'to-transparent')} />
+      <div className="relative flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
+          <p className="mt-1.5 font-heading text-[40px] leading-none tracking-tight text-foreground tabular-nums">
+            {loading ? <span className="inline-block h-8 w-10 bg-muted rounded animate-pulse" /> : value}
+          </p>
+        </div>
+        <span className={cn('h-9 w-9 rounded-xl flex items-center justify-center shrink-0', toneStyles.pill)}>
+          <Icon className="h-4 w-4" />
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function EmptyState({ onCreate }: { onCreate: () => void }) {
+  return (
+    <div className="relative overflow-hidden rounded-3xl border border-dashed border-border bg-gradient-to-br from-muted/50 to-background py-20 px-6 text-center">
+      <div className="absolute inset-0 bg-ledger opacity-40 pointer-events-none" />
+      <div className="relative">
+        {/* SVG illustration */}
+        <div className="mx-auto w-40 h-28 mb-6">
+          <svg viewBox="0 0 160 110" className="w-full h-full" aria-hidden="true">
+            {/* Archive shelf */}
+            <rect x="10" y="20" width="140" height="80" rx="4" fill="#faf0d9" stroke="#e9c775" strokeWidth="1" />
+            <line x1="10" y1="55" x2="150" y2="55" stroke="#c9974b" strokeWidth="1" opacity="0.4" />
+            {/* Folders */}
+            <rect x="22" y="28" width="22" height="22" rx="2" fill="#1e2a47" />
+            <rect x="48" y="28" width="22" height="22" rx="2" fill="#394669" />
+            <rect x="74" y="28" width="22" height="22" rx="2" fill="#c9974b" />
+            <rect x="100" y="28" width="22" height="22" rx="2" fill="#78716c" opacity="0.6" />
+            {/* lower shelf - empty */}
+            <rect x="22" y="62" width="22" height="22" rx="2" fill="none" stroke="#d4cec2" strokeWidth="1" strokeDasharray="2 2" />
+            <rect x="48" y="62" width="22" height="22" rx="2" fill="none" stroke="#d4cec2" strokeWidth="1" strokeDasharray="2 2" />
+            <rect x="74" y="62" width="22" height="22" rx="2" fill="none" stroke="#d4cec2" strokeWidth="1" strokeDasharray="2 2" />
+            {/* Arrow suggesting action */}
+            <path d="M 80 95 L 80 105 M 76 101 L 80 105 L 84 101" stroke="#c9974b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+          </svg>
+        </div>
+        <h3 className="font-heading text-2xl text-foreground mb-2">Noch leer hier drinnen.</h3>
+        <p className="text-muted-foreground max-w-sm mx-auto mb-8">
+          Legen Sie Ihr erstes Mietverhältnis an — Mieter, Adresse, fertig. Das Protokoll erstellen Sie direkt daraus.
+        </p>
+        <Button onClick={onCreate} size="lg" className="h-11 px-6 shadow-ink">
+          <Plus className="mr-1.5 h-4 w-4" />
+          Erstes Mietverhältnis anlegen
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+function Fieldset({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-3">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brass-600">{title}</p>
+      <div className="space-y-3">{children}</div>
+    </div>
+  )
+}
+
+function FormRow({ children, cols }: { children: React.ReactNode; cols?: number }) {
+  return (
+    <div className={cn('grid gap-3', cols === 2 && 'grid-cols-2', cols === 3 && 'grid-cols-3', !cols && 'grid-cols-1')}>
+      {children}
+    </div>
+  )
+}
+
+function FormField({
+  label, hint, span, children,
+}: {
+  label: string; hint?: string; span?: number; children: React.ReactNode
+}) {
+  return (
+    <div className={cn('space-y-1.5', span === 2 && 'col-span-2')}>
+      <Label className="text-xs font-medium text-foreground/80">
+        {label}
+        {hint && <span className="ml-1 text-muted-foreground font-normal">· {hint}</span>}
+      </Label>
+      {children}
     </div>
   )
 }

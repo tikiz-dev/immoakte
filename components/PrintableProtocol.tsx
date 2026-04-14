@@ -132,7 +132,7 @@ export const PrintableProtocol: React.FC<PrintableProtocolProps> = ({
                       pageBreakInside: 'avoid',
                     }}>
                       <p style={{ fontSize: '9pt', fontWeight: 700, color: '#92400e', margin: '0 0 1.5mm 0' }}>Mangel {dIdx + 1}:</p>
-                      <p style={{ fontSize: '10pt', color: '#78350f', margin: '0 0 3mm 0', whiteSpace: 'pre-wrap' }}>{defect.description}</p>
+                      <p style={{ fontSize: '10pt', color: '#78350f', margin: '0 0 3mm 0', whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflowWrap: 'anywhere' }}>{defect.description}</p>
 
                       {/* Defect photos - only if they actually loaded (non-empty base64) */}
                       {defect.photoUrls && defect.photoUrls.filter((u: string) => u && u.length > 50).length > 0 && (

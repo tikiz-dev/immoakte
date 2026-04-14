@@ -2,15 +2,16 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { DocumentEditor } from '@/components/DocumentEditor'
 import { toast } from 'sonner'
 import {
-  ArrowLeft, Save, Download, CheckCircle, FileText,
-  Tag, Trash2, AlertCircle
+  ArrowLeft, Save, Download, CheckCircle2, FileText,
+  Tag, Trash2, AlertCircle, Lock, X,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { de } from 'date-fns/locale'
@@ -27,7 +28,6 @@ export default function DocumentPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
   const { user } = useAuth()
-  const supabase = createClient()
 
   const [doc, setDoc] = useState<any>(null)
   const [name, setName] = useState('')
@@ -36,6 +36,7 @@ export default function DocumentPage() {
   const [saving, setSaving] = useState(false)
   const [isDirty, setIsDirty] = useState(false)
   const [showPlaceholders, setShowPlaceholders] = useState(false)
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
 
   useEffect(() => {
     if (!user) { router.replace('/login'); return }
@@ -84,33 +85,31 @@ export default function DocumentPage() {
   }, [id, name, content])
 
   const handleDelete = async () => {
-    if (!confirm('Dokument wirklich löschen?')) return
     const res = await fetch(`/api/documents/${id}`, { method: 'DELETE' })
     if (!res.ok) { toast.error('Fehler beim Löschen'); return }
+    setShowDeleteDialog(false)
     toast.success('Dokument gelöscht')
     router.push('/dashboard')
   }
 
   const downloadPDF = async () => {
-    toast.loading('PDF wird erstellt...', { id: 'doc-pdf' })
+    toast.loading('PDF wird erstellt…', { id: 'doc-pdf' })
     try {
-      // Save first
       await save()
 
       const html2pdf = (await import('html2pdf.js')).default
       const container = document.createElement('div')
-      container.style.cssText = 'width:210mm;padding:20mm;font-family:Helvetica,Arial,sans-serif;font-size:11pt;line-height:1.6;color:#0f172a;background:#fff'
+      container.style.cssText = 'width:210mm;padding:20mm;font-family:"Geist Variable",Helvetica,Arial,sans-serif;font-size:11pt;line-height:1.65;color:#1c1917;background:#fff'
       container.innerHTML = content
 
-      // Style the content nicely for PDF
       const style = document.createElement('style')
       style.textContent = `
-        h1 { font-size: 20pt; font-weight: 800; margin: 0 0 4mm 0; }
-        h2 { font-size: 13pt; font-weight: 700; margin: 5mm 0 2mm 0; border-bottom: 1px solid #cbd5e1; padding-bottom: 1mm; }
+        h1 { font-family: "Instrument Serif", Georgia, serif; font-size: 22pt; font-weight: 400; margin: 0 0 4mm 0; color: #1c1917; }
+        h2 { font-size: 13pt; font-weight: 600; margin: 6mm 0 2mm 0; border-bottom: 1px solid #e7e5e4; padding-bottom: 1mm; color: #1c1917; }
         p { margin: 0 0 3mm 0; }
-        hr { border: none; border-top: 1px solid #cbd5e1; margin: 4mm 0; }
-        strong { font-weight: 700; }
-        em { color: #64748b; font-size: 9pt; }
+        hr { border: none; border-top: 1px solid #e7e5e4; margin: 4mm 0; }
+        strong { font-weight: 600; }
+        em { color: #78716c; font-size: 9pt; font-style: italic; }
         ul, ol { margin: 0 0 3mm 4mm; }
       `
       container.prepend(style)
@@ -127,78 +126,88 @@ export default function DocumentPage() {
 
       document.body.removeChild(container)
       toast.success('PDF heruntergeladen', { id: 'doc-pdf' })
-    } catch (e) {
+    } catch {
       toast.error('Fehler beim Erstellen der PDF', { id: 'doc-pdf' })
     }
   }
 
   const insertPlaceholder = (ph: string) => {
-    // Insert placeholder at cursor or append to content
     const withPh = content + `<p>${ph}</p>`
     setContent(withPh)
     setIsDirty(true)
-    setShowPlaceholders(false)
     toast.info(`Platzhalter eingefügt: ${ph}`)
   }
 
   if (loading) return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-      <div className="text-muted-foreground">Lade Dokument...</div>
+    <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="flex items-center gap-3 text-muted-foreground text-sm">
+        <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+        Lade Dokument…
+      </div>
     </div>
   )
 
   const isFinalized = doc?.status === 'final'
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-background pb-24">
       {/* Header */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-20">
-        <div className="mx-auto max-w-5xl px-4 h-14 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <Button variant="ghost" size="icon" onClick={() => router.push('/dashboard')}>
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <FileText className="h-5 w-5 text-primary shrink-0" />
-            <div className="min-w-0">
+      <header className="sticky top-0 z-20 bg-background/85 backdrop-blur-xl border-b border-border">
+        <div className="mx-auto max-w-5xl px-4 h-14 flex items-center gap-3">
+          <Button variant="ghost" size="icon" onClick={() => router.push(doc?.tenancy_id ? `/tenancy/${doc.tenancy_id}` : '/dashboard')} className="shrink-0">
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+
+          <div className="flex-1 min-w-0 flex items-center gap-3">
+            <div className="h-9 w-9 rounded-xl bg-brass-50 text-brass-700 flex items-center justify-center shrink-0">
+              <FileText className="h-4 w-4" />
+            </div>
+            <div className="min-w-0 flex-1">
               {isFinalized ? (
-                <h1 className="font-semibold text-slate-900 truncate text-sm">{name}</h1>
+                <p className="font-medium text-foreground text-sm truncate">{name}</p>
               ) : (
                 <Input
                   value={name}
                   onChange={(e) => { setName(e.target.value); setIsDirty(true) }}
-                  className="h-7 text-sm font-semibold border-0 shadow-none px-0 focus-visible:ring-0 bg-transparent max-w-[300px]"
+                  className="h-7 text-sm font-medium border-0 shadow-none px-0 focus-visible:ring-0 bg-transparent max-w-[320px]"
                 />
               )}
-              <p className="text-xs text-muted-foreground">{TYPE_LABELS[doc?.type] || doc?.type}</p>
+              <p className="text-[11px] text-muted-foreground uppercase tracking-[0.12em] font-semibold">{TYPE_LABELS[doc?.type] || doc?.type}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+
+          <div className="flex items-center gap-1.5 shrink-0">
             {isFinalized ? (
-              <span className="flex items-center gap-1.5 text-xs font-medium text-green-700 bg-green-100 px-2.5 py-1 rounded-full">
-                <CheckCircle className="h-3.5 w-3.5" /> Abgeschlossen
-              </span>
+              <Badge variant="final" size="sm" className="hidden sm:inline-flex"><Lock className="h-3 w-3" />Abgeschlossen</Badge>
             ) : (
               <>
-                <Button variant="outline" size="sm" onClick={() => setShowPlaceholders(v => !v)}>
-                  <Tag className="h-3.5 w-3.5 mr-1.5" />
-                  Platzhalter
+                {/* Platzhalter: icon-only on mobile */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setShowPlaceholders(v => !v)}
+                  className={showPlaceholders ? 'bg-brass-50 text-brass-700' : ''}
+                  title="Platzhalter"
+                >
+                  <Tag className="h-4 w-4" />
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => save()} disabled={saving || !isDirty}>
-                  <Save className="h-3.5 w-3.5 mr-1.5" />
-                  {saving ? 'Speichert...' : 'Speichern'}
+                {/* Save: icon-only on mobile */}
+                <Button variant="outline" size="icon" onClick={() => save()} disabled={saving || !isDirty} title="Speichern">
+                  <Save className="h-4 w-4" />
                 </Button>
-                <Button size="sm" onClick={() => save({ finalize: true })} disabled={saving}>
-                  <CheckCircle className="h-3.5 w-3.5 mr-1.5" />
-                  Abschließen
+                {/* Finalize: icon + short label on sm+ */}
+                <Button size="sm" onClick={() => save({ finalize: true })} disabled={saving} className="gap-1.5">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">{saving ? 'Speichert…' : 'Abschließen'}</span>
                 </Button>
               </>
             )}
-            <Button variant="outline" size="sm" onClick={downloadPDF}>
-              <Download className="h-3.5 w-3.5 mr-1.5" />
-              PDF
+            {/* PDF: icon-only on mobile */}
+            <Button variant="outline" size="icon" onClick={downloadPDF} title="PDF herunterladen">
+              <Download className="h-4 w-4" />
             </Button>
             {!isFinalized && (
-              <Button variant="ghost" size="icon" onClick={handleDelete} className="text-destructive hover:text-destructive">
+              <Button variant="ghost" size="icon" onClick={() => setShowDeleteDialog(true)} className="text-muted-foreground hover:text-destructive">
                 <Trash2 className="h-4 w-4" />
               </Button>
             )}
@@ -206,71 +215,131 @@ export default function DocumentPage() {
         </div>
       </header>
 
-      {/* Placeholder drawer */}
-      {showPlaceholders && (
-        <div className="bg-blue-50 border-b border-blue-200">
-          <div className="mx-auto max-w-5xl px-4 py-3">
-            <p className="text-xs font-medium text-blue-700 mb-2">Platzhalter einfügen (wird beim Erstellen automatisch befüllt):</p>
-            <div className="flex flex-wrap gap-2">
-              {Object.entries(PLACEHOLDER_LABELS).map(([ph, label]) => (
-                <button
-                  key={ph}
-                  onClick={() => insertPlaceholder(ph)}
-                  className="text-xs bg-white border border-blue-200 hover:border-blue-400 text-blue-700 px-2.5 py-1 rounded-full transition-colors"
-                >
-                  {ph} <span className="text-blue-400">· {label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Mietvertrag warning */}
       {doc?.type === 'mietvertrag' && !isFinalized && (
-        <div className="bg-amber-50 border-b border-amber-200">
-          <div className="mx-auto max-w-5xl px-4 py-2 flex items-center gap-2 text-amber-700 text-sm">
+        <div className="bg-brass-50 border-b border-brass-200">
+          <div className="mx-auto max-w-5xl px-4 py-2.5 flex items-center gap-2 text-brass-800 text-sm">
             <AlertCircle className="h-4 w-4 shrink-0" />
-            <span>Rechtlicher Hinweis: Bitte lassen Sie diesen Mietvertrag vor Unterzeichnung von einem Rechtsanwalt prüfen.</span>
+            <span><strong className="font-medium">Rechtlicher Hinweis:</strong> Bitte lassen Sie diesen Mietvertrag vor Unterzeichnung von einem Rechtsanwalt prüfen.</span>
           </div>
         </div>
       )}
 
-      {/* Editor */}
-      <main className="mx-auto max-w-5xl px-4 py-6">
-        {/* Meta info */}
+      <main className="mx-auto max-w-5xl px-4 py-8">
+        {/* Meta chips */}
         {(doc?.tenant_first_name || doc?.finalized_at) && (
-          <div className="mb-4 flex flex-wrap gap-3 text-sm text-muted-foreground">
+          <div className="mb-6 flex flex-wrap gap-2">
             {doc.tenant_first_name && (
-              <span>Mieter: <strong className="text-slate-700">{doc.tenant_first_name} {doc.tenant_last_name}</strong></span>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-muted/60 text-xs">
+                <span className="text-muted-foreground">Mieter</span>
+                <span className="font-medium text-foreground">{doc.tenant_first_name} {doc.tenant_last_name}</span>
+              </span>
             )}
             {doc.finalized_at && (
-              <span>Abgeschlossen: <strong className="text-slate-700">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs">
+                <CheckCircle2 className="h-3 w-3" />
                 {format(new Date(doc.finalized_at), 'dd. MMMM yyyy', { locale: de })}
-              </strong></span>
+              </span>
             )}
           </div>
         )}
 
-        {/* Editor or read-only view */}
-        <div className="bg-white rounded-xl shadow-sm">
-          {isFinalized ? (
+        <div className="grid gap-6 lg:grid-cols-[1fr_auto]">
+          {/* Paper */}
+          <div className="relative">
             <div
-              className="prose prose-sm max-w-none p-8"
-              dangerouslySetInnerHTML={{ __html: content }}
-            />
-          ) : (
-            <DocumentEditor
-              content={content}
-              onChange={(html) => { setContent(html); setIsDirty(true) }}
-            />
+              className="relative bg-card rounded-sm shadow-[0_30px_60px_-20px_rgba(28,25,23,0.18),0_10px_20px_-12px_rgba(28,25,23,0.1)] border border-border overflow-hidden"
+              style={{ minHeight: '60vh' }}
+            >
+              {/* Left margin ribbon for that legal-pad feel */}
+              <div className="absolute top-0 bottom-0 left-12 w-px bg-brass-200/60 pointer-events-none" aria-hidden="true" />
+              {/* Subtle paper grain overlay */}
+              <div
+                className="absolute inset-0 pointer-events-none opacity-[0.04]"
+                aria-hidden="true"
+                style={{
+                  backgroundImage:
+                    'radial-gradient(circle at 25% 25%, rgba(28,25,23,0.3) 0, transparent 50%), radial-gradient(circle at 75% 75%, rgba(28,25,23,0.3) 0, transparent 50%)',
+                  backgroundSize: '40px 40px, 60px 60px',
+                }}
+              />
+
+              {isFinalized ? (
+                <div
+                  className="prose prose-stone prose-sm max-w-none px-10 md:px-16 py-12 md:py-14 relative"
+                  dangerouslySetInnerHTML={{ __html: content }}
+                />
+              ) : (
+                <div className="relative">
+                  <DocumentEditor
+                    content={content}
+                    onChange={(html) => { setContent(html); setIsDirty(true) }}
+                  />
+                </div>
+              )}
+            </div>
+
+            {isDirty && !isFinalized && (
+              <p className="text-xs text-muted-foreground mt-3 text-center flex items-center justify-center gap-1.5">
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-brass-500 animate-pulse" />
+                Ungespeicherte Änderungen
+              </p>
+            )}
+          </div>
+
+          {/* Placeholder side panel (desktop) */}
+          {showPlaceholders && !isFinalized && (
+            <aside className="lg:w-72 bg-card rounded-2xl border border-border shadow-xs p-5 h-fit lg:sticky lg:top-20">
+              <div className="flex items-start justify-between mb-2">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brass-600">Einfügen</p>
+                  <h3 className="font-heading text-lg text-foreground mt-0.5">Platzhalter</h3>
+                </div>
+                <button
+                  onClick={() => setShowPlaceholders(false)}
+                  className="h-7 w-7 rounded-lg text-muted-foreground hover:bg-muted flex items-center justify-center"
+                  aria-label="Schließen"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <p className="text-xs text-muted-foreground mb-4">
+                Diese Felder werden beim nächsten Dokument automatisch befüllt.
+              </p>
+              <div className="space-y-1.5">
+                {Object.entries(PLACEHOLDER_LABELS).map(([ph, label]) => (
+                  <button
+                    key={ph}
+                    onClick={() => insertPlaceholder(ph)}
+                    className="group w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg border border-border bg-background hover:border-ink-200 hover:bg-muted/40 transition-all text-left"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <code className="text-[11px] font-mono text-brass-700 bg-brass-50 px-1.5 py-0.5 rounded">{ph}</code>
+                      <p className="text-xs text-muted-foreground mt-1 truncate">{label}</p>
+                    </div>
+                    <span className="text-muted-foreground group-hover:text-foreground text-sm shrink-0">+</span>
+                  </button>
+                ))}
+              </div>
+            </aside>
           )}
         </div>
-
-        {isDirty && !isFinalized && (
-          <p className="text-xs text-muted-foreground mt-2 text-center">Ungespeicherte Änderungen</p>
-        )}
       </main>
+
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Dokument löschen</DialogTitle>
+            <DialogDescription>
+              Möchten Sie das Dokument „{name}" wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>Abbrechen</Button>
+            <Button variant="destructive" onClick={handleDelete}>Löschen</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

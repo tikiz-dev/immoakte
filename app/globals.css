@@ -1,12 +1,17 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "@fontsource-variable/geist";
+@import "@fontsource/instrument-serif";
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-    --font-heading: var(--font-sans);
-    --font-sans: 'Geist Variable', sans-serif;
+    /* ===== Typography ===== */
+    --font-sans: 'Geist Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-heading: 'Instrument Serif', 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Georgia, serif;
+    --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+
+    /* ===== Semantic color tokens (consumed via Tailwind utilities) ===== */
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -38,132 +43,180 @@
     --color-card: var(--card);
     --color-foreground: var(--foreground);
     --color-background: var(--background);
-    --radius-sm: calc(var(--radius) * 0.6);
-    --radius-md: calc(var(--radius) * 0.8);
+
+    /* ===== Radius system ===== */
+    --radius-sm: calc(var(--radius) * 0.5);
+    --radius-md: calc(var(--radius) * 0.75);
     --radius-lg: var(--radius);
     --radius-xl: calc(var(--radius) * 1.4);
-    --radius-2xl: calc(var(--radius) * 1.8);
-    --radius-3xl: calc(var(--radius) * 2.2);
-    --radius-4xl: calc(var(--radius) * 2.6);
+    --radius-2xl: calc(var(--radius) * 2);
+    --radius-3xl: calc(var(--radius) * 2.8);
+    --radius-4xl: calc(var(--radius) * 3.6);
 
-    --color-slate-50: #f8fafc;
-    --color-slate-100: #f1f5f9;
-    --color-slate-200: #e2e8f0;
-    --color-slate-300: #cbd5e1;
-    --color-slate-400: #94a3b8;
-    --color-slate-500: #64748b;
-    --color-slate-600: #475569;
-    --color-slate-700: #334155;
-    --color-slate-800: #1e293b;
-    --color-slate-900: #0f172a;
-    --color-slate-950: #020617;
+    /* =====================================================================
+       Slate scale REMAPPED to warm stone values.
+       Every `bg-slate-*`, `text-slate-*`, `border-slate-*` utility now
+       renders with warm, paper-like neutrals. This shifts the whole app's
+       feel from cool-corporate to warm-archival in one stroke.
+       ===================================================================== */
+    --color-slate-50:  #fafaf9;
+    --color-slate-100: #f5f4f0;
+    --color-slate-200: #e9e5dd;
+    --color-slate-300: #d4cec2;
+    --color-slate-400: #a8a294;
+    --color-slate-500: #78716c;
+    --color-slate-600: #57534e;
+    --color-slate-700: #44403c;
+    --color-slate-800: #292524;
+    --color-slate-900: #1c1917;
+    --color-slate-950: #0c0a09;
 
-    --color-emerald-50: #ecfdf5;
-    --color-emerald-100: #d1fae5;
-    --color-emerald-200: #a7f3d0;
-    --color-emerald-300: #6ee7b7;
-    --color-emerald-400: #34d399;
-    --color-emerald-500: #10b981;
-    --color-emerald-600: #059669;
-    --color-emerald-700: #047857;
-    --color-emerald-800: #065f46;
-    --color-emerald-900: #064e3b;
-    --color-emerald-950: #022c22;
+    /* Status colors — adjusted for warmer palette harmony */
+    --color-emerald-50:  #f0faf3;
+    --color-emerald-100: #d8f2de;
+    --color-emerald-200: #b1e4be;
+    --color-emerald-300: #7fcc92;
+    --color-emerald-400: #4daf65;
+    --color-emerald-500: #2f8a47;
+    --color-emerald-600: #24703a;
+    --color-emerald-700: #1d5a30;
+    --color-emerald-800: #194727;
+    --color-emerald-900: #143820;
+    --color-emerald-950: #0a2013;
 
-    --color-amber-50: #fffbeb;
-    --color-amber-100: #fef3c7;
-    --color-amber-200: #fde68a;
-    --color-amber-300: #fcd34d;
-    --color-amber-400: #fbbf24;
-    --color-amber-500: #f59e0b;
-    --color-amber-600: #d97706;
-    --color-amber-700: #b45309;
-    --color-amber-800: #92400e;
-    --color-amber-900: #78350f;
-    --color-amber-950: #451a03;
+    --color-amber-50:  #fdf9f0;
+    --color-amber-100: #faf0d9;
+    --color-amber-200: #f3dfa8;
+    --color-amber-300: #e9c775;
+    --color-amber-400: #dcab4a;
+    --color-amber-500: #c9974b;
+    --color-amber-600: #a87d34;
+    --color-amber-700: #866327;
+    --color-amber-800: #6b4f23;
+    --color-amber-900: #4a361a;
+    --color-amber-950: #2a1f0f;
 
-    --color-red-50: #fef2f2;
-    --color-red-100: #fee2e2;
-    --color-red-200: #fecaca;
-    --color-red-300: #fca5a5;
-    --color-red-400: #f87171;
-    --color-red-500: #ef4444;
-    --color-red-600: #dc2626;
-    --color-red-700: #b91c1c;
-    --color-red-800: #991b1b;
-    --color-red-900: #7f1d1d;
-    --color-red-950: #450a0a;
+    --color-red-50:  #fdf4f3;
+    --color-red-100: #fbe7e4;
+    --color-red-200: #f6c8c1;
+    --color-red-300: #eea094;
+    --color-red-400: #e37768;
+    --color-red-500: #c94a38;
+    --color-red-600: #a83826;
+    --color-red-700: #892c1f;
+    --color-red-800: #6b241b;
+    --color-red-900: #521d16;
+    --color-red-950: #2c0d0a;
+
+    /* ===== Brass — the brand accent scale (warm copper/cognac) ===== */
+    --color-brass-50:  #fdf9f0;
+    --color-brass-100: #faf0d9;
+    --color-brass-200: #f3dfa8;
+    --color-brass-300: #e9c775;
+    --color-brass-400: #dcab4a;
+    --color-brass-500: #c9974b;
+    --color-brass-600: #a87d34;
+    --color-brass-700: #866327;
+    --color-brass-800: #6b4f23;
+    --color-brass-900: #4a361a;
+
+    /* ===== Ink — the brand primary scale (deep fountain-pen blue) ===== */
+    --color-ink-50:  #f1f3f7;
+    --color-ink-100: #dde2ec;
+    --color-ink-200: #b8c1d4;
+    --color-ink-300: #8a96b3;
+    --color-ink-400: #5d6a8c;
+    --color-ink-500: #394669;
+    --color-ink-600: #2a3552;
+    --color-ink-700: #1e2a47;
+    --color-ink-800: #161f35;
+    --color-ink-900: #0d1323;
+
+    /* ===== Shadow system — warm-tinted, 3-stage ===== */
+    --shadow-xs: 0 1px 2px 0 rgba(28, 25, 23, 0.04);
+    --shadow-sm: 0 1px 2px 0 rgba(28, 25, 23, 0.05), 0 1px 1px 0 rgba(28, 25, 23, 0.03);
+    --shadow-md: 0 4px 8px -2px rgba(28, 25, 23, 0.06), 0 2px 4px -2px rgba(28, 25, 23, 0.04);
+    --shadow-lg: 0 12px 24px -6px rgba(28, 25, 23, 0.08), 0 6px 12px -6px rgba(28, 25, 23, 0.05);
+    --shadow-xl: 0 24px 48px -12px rgba(28, 25, 23, 0.10), 0 12px 24px -12px rgba(28, 25, 23, 0.06);
+    --shadow-2xl: 0 40px 80px -20px rgba(28, 25, 23, 0.14), 0 16px 32px -16px rgba(28, 25, 23, 0.08);
+
+    /* Subtle ink-tinted shadow for primary/CTA elevation */
+    --shadow-ink: 0 8px 24px -6px rgba(30, 42, 71, 0.22), 0 4px 8px -4px rgba(30, 42, 71, 0.12);
+    --shadow-brass: 0 8px 24px -6px rgba(201, 151, 75, 0.35), 0 4px 8px -4px rgba(201, 151, 75, 0.18);
 }
 
+/* ===== Light theme ===== */
 :root {
-    --background: #ffffff;
-    --foreground: #0f172a;
+    --background: #faf8f3;          /* warm paper off-white */
+    --foreground: #1c1917;          /* warm near-black */
     --card: #ffffff;
-    --card-foreground: #0f172a;
+    --card-foreground: #1c1917;
     --popover: #ffffff;
-    --popover-foreground: #0f172a;
-    --primary: #2563eb;
-    --primary-foreground: #ffffff;
-    --secondary: #f1f5f9;
-    --secondary-foreground: #1e293b;
-    --muted: #f1f5f9;
-    --muted-foreground: #64748b;
-    --accent: #eff6ff;
-    --accent-foreground: #1d4ed8;
-    --destructive: #ef4444;
-    --border: #e2e8f0;
-    --input: #e2e8f0;
-    --ring: #93c5fd;
-    --chart-1: #3b82f6;
-    --chart-2: #6366f1;
-    --chart-3: #8b5cf6;
-    --chart-4: #ec4899;
-    --chart-5: #f59e0b;
-    --radius: 0.625rem;
-    --sidebar: #f8fafc;
-    --sidebar-foreground: #0f172a;
-    --sidebar-primary: #2563eb;
-    --sidebar-primary-foreground: #ffffff;
-    --sidebar-accent: #eff6ff;
-    --sidebar-accent-foreground: #1d4ed8;
-    --sidebar-border: #e2e8f0;
-    --sidebar-ring: #93c5fd;
+    --popover-foreground: #1c1917;
+    --primary: #1e2a47;             /* deep fountain-pen ink */
+    --primary-foreground: #faf8f3;
+    --secondary: #f5f4f0;
+    --secondary-foreground: #292524;
+    --muted: #f5f4f0;
+    --muted-foreground: #78716c;
+    --accent: #faf0d9;              /* warm cream for tinted backgrounds */
+    --accent-foreground: #866327;
+    --destructive: #c94a38;
+    --border: #e9e5dd;
+    --input: #e9e5dd;
+    --ring: rgba(30, 42, 71, 0.35);
+    --chart-1: #1e2a47;
+    --chart-2: #c9974b;
+    --chart-3: #78716c;
+    --chart-4: #2f8a47;
+    --chart-5: #e9c775;
+    --radius: 0.75rem;
+    --sidebar: #f5f4f0;
+    --sidebar-foreground: #1c1917;
+    --sidebar-primary: #1e2a47;
+    --sidebar-primary-foreground: #faf8f3;
+    --sidebar-accent: #faf0d9;
+    --sidebar-accent-foreground: #866327;
+    --sidebar-border: #e9e5dd;
+    --sidebar-ring: rgba(30, 42, 71, 0.35);
 }
 
+/* ===== Dark theme — warm-toned, not pure black ===== */
 .dark {
-    --background: #0f172a;
-    --foreground: #f1f5f9;
-    --card: #1e293b;
-    --card-foreground: #f1f5f9;
-    --popover: #1e293b;
-    --popover-foreground: #f1f5f9;
-    --primary: #3b82f6;
-    --primary-foreground: #ffffff;
-    --secondary: #262626;
-    --secondary-foreground: #fafafa;
-    --muted: #262626;
-    --muted-foreground: #a3a3a3;
-    --accent: #262626;
-    --accent-foreground: #fafafa;
-    --destructive: #b91c1c;
-    --border: rgba(255, 255, 255, 0.1);
-    --input: rgba(255, 255, 255, 0.15);
-    --ring: #737373;
-    --chart-1: #d4d4d4;
-    --chart-2: #737373;
-    --chart-3: #525252;
-    --chart-4: #404040;
-    --chart-5: #262626;
-    --sidebar: #262626;
-    --sidebar-foreground: #fafafa;
-    --sidebar-primary: #3b82f6;
-    --sidebar-primary-foreground: #fafafa;
-    --sidebar-accent: #262626;
-    --sidebar-accent-foreground: #fafafa;
-    --sidebar-border: rgba(255, 255, 255, 0.1);
-    --sidebar-ring: #737373;
+    --background: #14110f;
+    --foreground: #f5f4f0;
+    --card: #1c1917;
+    --card-foreground: #f5f4f0;
+    --popover: #1c1917;
+    --popover-foreground: #f5f4f0;
+    --primary: #e9c775;             /* brass as primary in dark mode — warm glow */
+    --primary-foreground: #1c1917;
+    --secondary: #292524;
+    --secondary-foreground: #f5f4f0;
+    --muted: #292524;
+    --muted-foreground: #a8a294;
+    --accent: #3d362d;
+    --accent-foreground: #e9c775;
+    --destructive: #e37768;
+    --border: rgba(245, 244, 240, 0.08);
+    --input: rgba(245, 244, 240, 0.12);
+    --ring: rgba(233, 199, 117, 0.4);
+    --chart-1: #e9c775;
+    --chart-2: #8a96b3;
+    --chart-3: #a8a294;
+    --chart-4: #7fcc92;
+    --chart-5: #dcab4a;
+    --sidebar: #1c1917;
+    --sidebar-foreground: #f5f4f0;
+    --sidebar-primary: #e9c775;
+    --sidebar-primary-foreground: #1c1917;
+    --sidebar-accent: #292524;
+    --sidebar-accent-foreground: #e9c775;
+    --sidebar-border: rgba(245, 244, 240, 0.08);
+    --sidebar-ring: rgba(233, 199, 117, 0.4);
 }
 
+/* ===== Base layer ===== */
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -173,14 +226,111 @@
     @apply font-sans;
     overflow-x: hidden;
     max-width: 100%;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
   }
   body {
     @apply bg-background text-foreground;
     overflow-x: hidden;
     max-width: 100%;
     -webkit-text-size-adjust: 100%;
+    font-feature-settings: "ss01", "cv11";
   }
   img, video, svg {
     max-width: 100%;
+  }
+  /* Display font applies to .font-heading utility */
+  .font-heading {
+    font-family: var(--font-heading);
+    font-weight: 400;
+    letter-spacing: -0.01em;
+  }
+  /* Selection */
+  ::selection {
+    background: var(--color-brass-200);
+    color: var(--color-ink-900);
+  }
+  .dark ::selection {
+    background: var(--color-brass-700);
+    color: var(--color-brass-50);
+  }
+}
+
+/* ===== Utility patterns — paper grain, blueprint grid, noise ===== */
+@layer utilities {
+  /* Very fine paper-like noise — used on large hero surfaces */
+  .bg-paper-grain {
+    background-image:
+      radial-gradient(circle at 20% 30%, rgba(120, 113, 108, 0.04) 0%, transparent 40%),
+      radial-gradient(circle at 80% 70%, rgba(201, 151, 75, 0.03) 0%, transparent 40%);
+  }
+  /* Warm radial spot — for hero backgrounds */
+  .bg-hero-glow {
+    background:
+      radial-gradient(ellipse 90% 60% at 50% 0%, rgba(233, 199, 117, 0.18) 0%, transparent 55%),
+      radial-gradient(ellipse 60% 40% at 90% 30%, rgba(30, 42, 71, 0.06) 0%, transparent 60%),
+      #faf8f3;
+  }
+  .dark .bg-hero-glow {
+    background:
+      radial-gradient(ellipse 90% 60% at 50% 0%, rgba(233, 199, 117, 0.08) 0%, transparent 55%),
+      radial-gradient(ellipse 60% 40% at 90% 30%, rgba(138, 150, 179, 0.05) 0%, transparent 60%),
+      #14110f;
+  }
+  /* Fine dotted grid, reminiscent of ledger paper */
+  .bg-ledger {
+    background-image: radial-gradient(circle, rgba(28, 25, 23, 0.07) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+  .dark .bg-ledger {
+    background-image: radial-gradient(circle, rgba(245, 244, 240, 0.06) 1px, transparent 1px);
+  }
+  /* Shadow utilities bound to new token system */
+  .shadow-ink { box-shadow: var(--shadow-ink); }
+  .shadow-brass { box-shadow: var(--shadow-brass); }
+}
+
+/* ===== Keyframes ===== */
+@keyframes shimmer {
+  100% { transform: translateX(100%); }
+}
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes draw-check {
+  to { stroke-dashoffset: 0; }
+}
+@keyframes page-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ===== Motion utilities ===== */
+@layer utilities {
+  /* Stagger-friendly fade-up; caller sets --stagger-i via inline style. */
+  .motion-fade-up {
+    animation: fade-up 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation-delay: calc(var(--stagger-i, 0) * 60ms);
+  }
+  .motion-page-in {
+    animation: page-in 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  /* Hover lift — applied on interactive cards. */
+  .hover-lift {
+    transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .hover-lift:hover {
+    transform: translateY(-2px);
+  }
+}
+
+/* Motion-reduced: kill non-essential transforms */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

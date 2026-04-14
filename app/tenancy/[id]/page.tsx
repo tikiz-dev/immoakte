@@ -1,14 +1,15 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import {
   ArrowLeft, Plus, FileSignature, Home, Key, FileText,
   FileCheck, CheckCircle2, Clock, ChevronRight, Building2,
-  Mail, Phone, User, Pencil, Trash2
+  Mail, Phone, Pencil, Trash2, Sparkles, MapPin,
 } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { format } from 'date-fns'
@@ -32,13 +33,14 @@ const ITEM_CONFIG: Record<string, {
   hint: string
   order: number
   kind: 'document' | 'protocol'
+  accent: 'ink' | 'brass' | 'emerald'
 }> = {
-  mietvertrag:               { label: 'Mietvertrag',               icon: FileSignature, hint: 'Vor Einzug',             order: 1, kind: 'document'  },
-  Einzug:                    { label: 'Einzugsprotokoll',           icon: FileText,      hint: 'Am Einzugstag',          order: 2, kind: 'protocol'  },
-  wohnungsgeberbestaetigung: { label: 'Wohnungsgeberbestätigung',   icon: Home,          hint: 'Pflicht bei Einzug',     order: 3, kind: 'document'  },
-  kautionsbescheinigung:     { label: 'Kautionsbescheinigung',      icon: Key,           hint: 'Nach Kautionszahlung',   order: 4, kind: 'document'  },
-  Auszug:                    { label: 'Auszugsprotokoll',           icon: FileCheck,     hint: 'Bei Auszug',             order: 5, kind: 'protocol'  },
-  sonstiges:                 { label: 'Leeres Dokument',            icon: FileText,      hint: 'Freier Text, eigene Vorlage', order: 6, kind: 'document'  },
+  mietvertrag:               { label: 'Mietvertrag',               icon: FileSignature, hint: 'Vor Einzug',                  order: 1, kind: 'document', accent: 'ink'    },
+  Einzug:                    { label: 'Einzugsprotokoll',           icon: Home,          hint: 'Am Einzugstag',               order: 2, kind: 'protocol', accent: 'brass'  },
+  wohnungsgeberbestaetigung: { label: 'Wohnungsgeberbestätigung',   icon: FileText,      hint: 'Pflicht bei Einzug',          order: 3, kind: 'document', accent: 'ink'    },
+  kautionsbescheinigung:     { label: 'Kautionsbescheinigung',      icon: Key,           hint: 'Nach Kautionszahlung',        order: 4, kind: 'document', accent: 'ink'    },
+  Auszug:                    { label: 'Auszugsprotokoll',           icon: FileCheck,     hint: 'Bei Auszug',                  order: 5, kind: 'protocol', accent: 'emerald'},
+  sonstiges:                 { label: 'Leeres Dokument',            icon: FileText,      hint: 'Freier Text, eigene Vorlage', order: 6, kind: 'document', accent: 'ink'    },
 }
 
 function safeDate(d?: string | null) {
@@ -47,16 +49,18 @@ function safeDate(d?: string | null) {
   catch { return null }
 }
 
-function StatusBadge({ status, finalized }: { status: string; finalized?: string | null }) {
-  const done = status === 'final' || !!finalized
-  return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${
-      done ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
-    }`}>
-      {done ? <CheckCircle2 className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
-      {done ? 'Abgeschlossen' : 'Entwurf'}
-    </span>
-  )
+function initialsOf(first?: string, last?: string) {
+  return `${(first?.[0] || '').toUpperCase()}${(last?.[0] || '').toUpperCase()}` || '??'
+}
+
+function StageFromItems(items: TenancyItem[]): { label: string; variant: 'draft' | 'active' | 'final' } {
+  const einzug = items.find(i => i.type === 'Einzug')
+  const auszug = items.find(i => i.type === 'Auszug')
+  if (auszug?.status === 'final') return { label: 'Abgeschlossen', variant: 'final' }
+  if (auszug) return { label: 'Auszug in Arbeit', variant: 'active' }
+  if (einzug?.status === 'final') return { label: 'Laufend', variant: 'final' }
+  if (einzug) return { label: 'Einzug in Arbeit', variant: 'active' }
+  return { label: 'Neu', variant: 'draft' }
 }
 
 export default function TenancyPage() {
@@ -92,7 +96,6 @@ export default function TenancyPage() {
 
     setTenancy(json.tenancy)
 
-    // Merge protocols + documents into unified items list
     const merged: TenancyItem[] = []
 
     for (const proto of (json.protocols || [])) {
@@ -136,7 +139,6 @@ export default function TenancyPage() {
       if (cfg.kind === 'protocol') {
         const einzugItem = items.find(i => i.type === 'Einzug')
 
-        // For Auszug: load Einzug data to pre-fill rooms/meters/keys
         let einzugData: any = null
         if (type === 'Auszug' && einzugItem) {
           const { data } = await supabase.from('protocols').select('rooms,meters,keys').eq('id', einzugItem.id).single()
@@ -178,7 +180,6 @@ export default function TenancyPage() {
         if (error) throw error
         router.push(`/protocol/${proto.id}`)
       } else {
-        // Create document
         const res = await fetch('/api/documents', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -222,219 +223,258 @@ export default function TenancyPage() {
     toast.success('Dokument gelöscht')
   }
 
+  const stage = useMemo(() => StageFromItems(items), [items])
+
   if (loading || !tenancy) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="text-muted-foreground">Lade Mietverhältnis...</div>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex items-center gap-3 text-muted-foreground text-sm">
+          <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          Lade Mietverhältnis…
+        </div>
       </div>
     )
   }
 
   const property = tenancy.properties
   const address = property?.address || `${property?.street || ''} ${property?.house_number || ''}, ${property?.zip_code || ''} ${property?.city || ''}`.trim()
-  const tenantName = `${tenancy.tenant_salutation || ''} ${tenancy.tenant_first_name || ''} ${tenancy.tenant_last_name || ''}`.trim()
+  const tenantFullName = `${tenancy.tenant_first_name || ''} ${tenancy.tenant_last_name || ''}`.trim()
+  const tenantName = `${tenancy.tenant_salutation || ''} ${tenantFullName}`.trim()
+  const initials = initialsOf(tenancy.tenant_first_name, tenancy.tenant_last_name)
 
-  // Which types already exist?
   const existingTypes = new Set(items.map(i => i.type))
 
-  // Available items to add (not yet created)
-  const availableToAdd = Object.entries(ITEM_CONFIG).filter(([type, cfg]) => {
+  const availableToAdd = Object.entries(ITEM_CONFIG).filter(([type]) => {
+    if (type === 'sonstiges') return false
     if (existingTypes.has(type)) return false
-    // Auszug only available after Einzug is finalized
     if (type === 'Auszug') {
       const einzug = items.find(i => i.type === 'Einzug')
       return einzug?.status === 'final'
     }
-    // Only one 'sonstiges' shown in add section, can add more from there
     return true
   })
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-16">
+    <div className="min-h-screen bg-background pb-20">
       {/* Header */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-20">
+      <header className="sticky top-0 z-20 bg-background/80 backdrop-blur-xl border-b border-border">
         <div className="mx-auto max-w-3xl px-4 h-14 flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => router.push('/dashboard')}>
+          <Button variant="ghost" size="icon" onClick={() => router.push('/dashboard')} className="shrink-0">
             <ArrowLeft className="h-4 w-4" />
           </Button>
-          <div className="flex-1 min-w-0">
-            <h1 className="font-semibold text-slate-900 truncate text-sm">{tenantName}</h1>
-            <p className="text-xs text-muted-foreground truncate flex items-center gap-1">
-              <Building2 className="h-3 w-3 shrink-0" /> {address}
-            </p>
+          <div className="flex-1 min-w-0 flex items-center gap-2">
+            <p className="text-xs text-muted-foreground uppercase tracking-[0.14em] font-semibold">Mietverhältnis</p>
+            <span className="text-muted-foreground/40">·</span>
+            <p className="text-sm text-foreground truncate">{tenantFullName}</p>
           </div>
+          <Button variant="ghost" size="icon" className="shrink-0" onClick={() => router.push(`/tenancy/${id}/edit`)} title="Bearbeiten">
+            <Pencil className="h-4 w-4" />
+          </Button>
         </div>
       </header>
 
-      <main className="mx-auto max-w-3xl px-4 py-6 space-y-6">
-        {/* Tenant info card */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
-          <div className="flex items-start justify-between">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                <User className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <p className="font-semibold text-slate-900">{tenantName}</p>
-                <div className="flex flex-wrap gap-3 mt-1">
-                  {tenancy.tenant_email && (
-                    <span className="text-xs text-muted-foreground flex items-center gap-1">
-                      <Mail className="h-3 w-3" /> {tenancy.tenant_email}
-                    </span>
-                  )}
-                  {tenancy.tenant_phone && (
-                    <span className="text-xs text-muted-foreground flex items-center gap-1">
-                      <Phone className="h-3 w-3" /> {tenancy.tenant_phone}
-                    </span>
-                  )}
+      <main className="mx-auto max-w-3xl px-4 py-8 space-y-8 motion-page-in">
+        {/* Hero info card */}
+        <section className="relative overflow-hidden rounded-3xl border border-border bg-card shadow-ink">
+          {/* Top accent strip */}
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-brass-400 via-brass-500 to-brass-400" />
+
+          <div className="p-6 md:p-8">
+            <div className="flex items-start justify-between gap-4 flex-wrap">
+              <div className="flex items-start gap-4 min-w-0 flex-1">
+                {/* Avatar */}
+                <div className="shrink-0 h-16 w-16 rounded-2xl bg-gradient-to-br from-ink-700 to-ink-900 flex items-center justify-center shadow-ink">
+                  <span className="font-heading text-xl text-background tracking-wide">{initials}</span>
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Badge variant={stage.variant} size="sm">{stage.label}</Badge>
+                  </div>
+                  <h1 className="font-heading text-2xl md:text-3xl text-foreground leading-tight">{tenantName || 'Unbenanntes Mietverhältnis'}</h1>
+                  <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
+                    <MapPin className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">{address}</span>
+                  </p>
                 </div>
               </div>
-            </div>
-            <div className="flex items-center gap-1">
-              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" title="Bearbeiten"
-                onClick={() => router.push(`/tenancy/${id}/edit`)}>
-                <Pencil className="h-3.5 w-3.5" />
-              </Button>
-              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" title="Mietverhältnis löschen"
-                onClick={() => setDeleteOpen(true)}>
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          </div>
-          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center gap-1.5 text-sm text-slate-600">
-            <Building2 className="h-4 w-4 text-slate-400 shrink-0" />
-            {address}
-          </div>
-        </div>
 
-        {/* Document timeline */}
-        <div>
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-            Unterlagen & Protokolle
-          </h2>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="shrink-0 text-muted-foreground hover:text-destructive"
+                onClick={() => setDeleteOpen(true)}
+                title="Mietverhältnis löschen"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
 
-          <div className="relative">
-            {/* Vertical line */}
-            {items.length > 0 && (
-              <div className="absolute left-5 top-6 bottom-6 w-0.5 bg-slate-200" />
+            {/* Contact chips */}
+            {(tenancy.tenant_email || tenancy.tenant_phone) && (
+              <div className="mt-5 pt-5 border-t border-border flex flex-wrap gap-2">
+                {tenancy.tenant_email && (
+                  <a
+                    href={`mailto:${tenancy.tenant_email}`}
+                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted/60 hover:bg-muted text-xs text-foreground transition-colors"
+                  >
+                    <Mail className="h-3 w-3 text-muted-foreground" />
+                    {tenancy.tenant_email}
+                  </a>
+                )}
+                {tenancy.tenant_phone && (
+                  <a
+                    href={`tel:${tenancy.tenant_phone}`}
+                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted/60 hover:bg-muted text-xs text-foreground transition-colors"
+                  >
+                    <Phone className="h-3 w-3 text-muted-foreground" />
+                    {tenancy.tenant_phone}
+                  </a>
+                )}
+              </div>
             )}
+          </div>
+        </section>
 
-            <div className="space-y-3">
-              {items.map((item) => {
-                const cfg = ITEM_CONFIG[item.type]
-                const Icon = cfg?.icon || FileText
-                const done = item.status === 'final'
+        {/* Timeline */}
+        <section>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brass-600">Akte</p>
+              <h2 className="font-heading text-xl text-foreground mt-0.5">Unterlagen &amp; Protokolle</h2>
+            </div>
+            <span className="text-xs text-muted-foreground">{items.length} {items.length === 1 ? 'Eintrag' : 'Einträge'}</span>
+          </div>
 
-                return (
-                  <div key={item.id} className="relative flex items-center gap-2 group/item">
-                    <button
-                      onClick={() => navigateToItem(item)}
-                      className="relative flex items-center gap-4 flex-1 bg-white rounded-xl border border-slate-200 shadow-sm px-4 py-3.5 hover:border-primary/40 hover:shadow-md transition-all text-left group"
-                    >
-                      {/* Icon with done indicator */}
-                      <div className={`relative shrink-0 h-10 w-10 rounded-full flex items-center justify-center z-10 ${
-                        done ? 'bg-green-100' : 'bg-slate-100'
-                      }`}>
-                        <Icon className={`h-5 w-5 ${done ? 'text-green-600' : 'text-slate-500'}`} />
-                        {done && (
-                          <div className="absolute -bottom-0.5 -right-0.5 h-4 w-4 bg-green-500 rounded-full flex items-center justify-center">
-                            <CheckCircle2 className="h-3 w-3 text-white" />
-                          </div>
-                        )}
-                      </div>
+          {items.length === 0 ? (
+            <EmptyTimeline />
+          ) : (
+            <div className="relative">
+              {/* Vertical rail */}
+              <div className="absolute left-[27px] top-6 bottom-6 w-px bg-border" aria-hidden="true" />
 
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-slate-900 text-sm">{item.name}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          {cfg?.hint && <span className="mr-2">{cfg.hint}</span>}
-                          {done && item.finalized_at && (
-                            <span className="text-green-600">✓ {safeDate(item.finalized_at)}</span>
-                          )}
-                          {!done && item.date && (
-                            <span>{safeDate(item.date)}</span>
-                          )}
-                        </p>
-                      </div>
+              <ul className="space-y-3">
+                {items.map((item, idx) => {
+                  const cfg = ITEM_CONFIG[item.type]
+                  const Icon = cfg?.icon || FileText
+                  const done = item.status === 'final'
 
-                      <div className="flex items-center gap-2 shrink-0">
-                        <StatusBadge status={item.status} finalized={item.finalized_at} />
-                        <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-primary transition-colors" />
-                      </div>
-                    </button>
-
-                    {/* Delete button for non-finalized documents */}
-                    {item.kind === 'document' && !item.finalized_at && (
+                  return (
+                    <li key={item.id} className="relative flex items-center gap-2 group/row motion-fade-up hover-lift" style={{ '--stagger-i': idx } as React.CSSProperties}>
                       <button
-                        onClick={() => deleteDocument(item.id)}
-                        className="p-2 text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover/item:opacity-100 shrink-0"
-                        title="Dokument löschen"
+                        onClick={() => navigateToItem(item)}
+                        className="relative flex items-center gap-4 flex-1 bg-card rounded-2xl border border-border shadow-xs px-4 py-3.5 hover:border-ink-200 hover:shadow-sm transition-all text-left group min-w-0"
                       >
-                        <Trash2 className="h-4 w-4" />
+                        {/* Milestone dot / icon */}
+                        <div className={`relative shrink-0 h-14 w-14 rounded-2xl flex items-center justify-center z-10 ring-4 ring-background ${
+                          done
+                            ? 'bg-emerald-50 text-emerald-700'
+                            : cfg?.accent === 'brass'
+                              ? 'bg-brass-50 text-brass-700'
+                              : 'bg-muted text-foreground'
+                        }`}>
+                          <Icon className="h-5 w-5" />
+                          {done && (
+                            <div className="absolute -bottom-1 -right-1 h-5 w-5 bg-emerald-500 rounded-full flex items-center justify-center ring-2 ring-background">
+                              <CheckCircle2 className="h-3 w-3 text-white" />
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-foreground text-sm truncate">{item.name}</p>
+                            {done ? (
+                              <Badge variant="final" size="sm">Abgeschlossen</Badge>
+                            ) : (
+                              <Badge variant="draft" size="sm">Entwurf</Badge>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                            {cfg?.hint && <span className="mr-2">{cfg.hint}</span>}
+                            {done && item.finalized_at && (
+                              <span className="text-emerald-700">✓ {safeDate(item.finalized_at)}</span>
+                            )}
+                            {!done && item.date && <span>{safeDate(item.date)}</span>}
+                          </p>
+                        </div>
+
+                        <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors shrink-0" />
                       </button>
+
+                      {item.kind === 'document' && !item.finalized_at && (
+                        <button
+                          onClick={() => deleteDocument(item.id)}
+                          className="p-2 text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover/row:opacity-100 shrink-0"
+                          title="Dokument löschen"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+          )}
+        </section>
+
+        {/* Add items */}
+        <section>
+          <div className="mb-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brass-600">Nächster Schritt</p>
+            <h2 className="font-heading text-xl text-foreground mt-0.5">Hinzufügen</h2>
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-2">
+            {availableToAdd.map(([type, cfg]) => {
+              const Icon = cfg.icon
+              const isCreating = creating === type
+              const tone =
+                cfg.accent === 'brass'
+                  ? 'bg-brass-50 text-brass-700 group-hover:bg-brass-100'
+                  : cfg.accent === 'emerald'
+                    ? 'bg-emerald-50 text-emerald-700 group-hover:bg-emerald-100'
+                    : 'bg-ink-50 text-ink-700 group-hover:bg-ink-100'
+              return (
+                <button
+                  key={type}
+                  onClick={() => createItem(type)}
+                  disabled={!!creating}
+                  className="group flex items-center gap-3 bg-card rounded-2xl border border-dashed border-border px-4 py-3 hover:border-solid hover:border-ink-200 hover:shadow-xs transition-all text-left disabled:opacity-50"
+                >
+                  <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 transition-colors ${tone}`}>
+                    {isCreating ? (
+                      <div className="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <Icon className="h-4 w-4" />
                     )}
                   </div>
-                )
-              })}
-            </div>
-          </div>
-        </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">{cfg.label}</p>
+                    {cfg.hint && <p className="text-xs text-muted-foreground truncate">{cfg.hint}</p>}
+                  </div>
+                  <Plus className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors shrink-0" />
+                </button>
+              )
+            })}
 
-        {/* Add items section */}
-        {availableToAdd.length > 0 && (
-          <div>
-            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-              Hinzufügen
-            </h2>
-            <div className="space-y-2">
-              {availableToAdd.map(([type, cfg]) => {
-                const Icon = cfg.icon
-                const isCreating = creating === type
-                return (
-                  <button
-                    key={type}
-                    onClick={() => createItem(type)}
-                    disabled={!!creating}
-                    className="flex items-center gap-3 w-full bg-white rounded-xl border border-dashed border-slate-300 px-4 py-3 hover:border-primary hover:bg-primary/5 transition-all text-left disabled:opacity-50"
-                  >
-                    <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                      {isCreating ? (
-                        <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                      ) : (
-                        <Icon className="h-4 w-4 text-primary" />
-                      )}
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-slate-700">{cfg.label}</p>
-                      {cfg.hint && <p className="text-xs text-muted-foreground">{cfg.hint}</p>}
-                    </div>
-                    <Plus className="h-4 w-4 text-primary" />
-                  </button>
-                )
-              })}
-
-              {/* Always show "add custom doc" option */}
-              <button
-                onClick={() => createItem('sonstiges')}
-                disabled={!!creating}
-                className="flex items-center gap-3 w-full bg-white rounded-xl border border-dashed border-slate-200 px-4 py-3 hover:border-slate-400 hover:bg-slate-50 transition-all text-left disabled:opacity-50"
-              >
-                <div className="h-9 w-9 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
-                  <Plus className="h-4 w-4 text-slate-500" />
-                </div>
-                <p className="text-sm text-slate-500">Leeres Dokument erstellen</p>
-              </button>
-            </div>
+            <button
+              onClick={() => createItem('sonstiges')}
+              disabled={!!creating}
+              className="group flex items-center gap-3 bg-muted/40 rounded-2xl border border-dashed border-border px-4 py-3 hover:border-ink-200 hover:bg-muted/60 transition-all text-left disabled:opacity-50"
+            >
+              <div className="h-10 w-10 rounded-xl bg-background border border-border flex items-center justify-center shrink-0">
+                <Sparkles className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-foreground">Leeres Dokument</p>
+                <p className="text-xs text-muted-foreground">Freier Text, eigene Vorlage</p>
+              </div>
+              <Plus className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors shrink-0" />
+            </button>
           </div>
-        )}
-
-        {/* Empty state */}
-        {items.length === 0 && (
-          <div className="text-center py-8 text-muted-foreground">
-            <FileText className="h-10 w-10 mx-auto mb-3 text-slate-300" />
-            <p className="font-medium text-slate-600">Noch keine Unterlagen</p>
-            <p className="text-sm mt-1">Starte mit dem Mietvertrag oder dem Einzugsprotokoll</p>
-          </div>
-        )}
+        </section>
       </main>
 
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
@@ -442,7 +482,7 @@ export default function TenancyPage() {
           <DialogHeader>
             <DialogTitle>Mietverhältnis löschen</DialogTitle>
             <DialogDescription>
-              Möchten Sie das Mietverhältnis von <strong>{tenantName}</strong> wirklich löschen?
+              Möchten Sie das Mietverhältnis von <strong>{tenantFullName}</strong> wirklich löschen?
               Alle zugehörigen Protokolle und Dokumente werden ebenfalls gelöscht.
               Diese Aktion kann nicht rückgängig gemacht werden.
             </DialogDescription>
@@ -450,11 +490,25 @@ export default function TenancyPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteOpen(false)} disabled={deleting}>Abbrechen</Button>
             <Button variant="destructive" onClick={deleteTenancy} disabled={deleting}>
-              {deleting ? 'Wird gelöscht...' : 'Endgültig löschen'}
+              {deleting ? 'Wird gelöscht…' : 'Endgültig löschen'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
+
+function EmptyTimeline() {
+  return (
+    <div className="rounded-3xl border border-dashed border-border bg-muted/30 p-10 text-center">
+      <div className="mx-auto mb-4 h-16 w-16 rounded-2xl bg-card border border-border flex items-center justify-center">
+        <FileText className="h-6 w-6 text-muted-foreground" />
+      </div>
+      <p className="font-heading text-lg text-foreground">Noch keine Unterlagen</p>
+      <p className="text-sm text-muted-foreground mt-1 max-w-sm mx-auto">
+        Starten Sie mit dem Mietvertrag oder direkt mit dem Einzugsprotokoll — die Akte füllt sich danach Schritt für Schritt.
+      </p>
     </div>
   )
 }
