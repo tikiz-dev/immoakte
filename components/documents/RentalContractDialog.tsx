@@ -67,6 +67,7 @@ export function RentalContractDialog({ open, onOpenChange, tenancyId, propertyId
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [depositTouched, setDepositTouched] = useState(false)
+  const [depositMultiplier, setDepositMultiplier] = useState<1 | 2 | 3>(3)
   const [templates, setTemplates] = useState<Array<{ id: string; name: string }>>([])
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('default')
 
@@ -121,9 +122,9 @@ export function RentalContractDialog({ open, onOpenChange, tenancyId, propertyId
   const rentCold = parseNum(terms.rent_cold)
   const utilities = parseNum(terms.utilities)
   const totalRent = rentCold !== null || utilities !== null ? (rentCold ?? 0) + (utilities ?? 0) : null
-  const suggestedDeposit = rentCold !== null ? rentCold * 3 : null
+  const suggestedDeposit = rentCold !== null ? rentCold * depositMultiplier : null
 
-  // Auto-suggest deposit = 3x Kaltmiete when user hasn't touched it
+  // Auto-suggest deposit = multiplier × Kaltmiete when user hasn't touched it
   useEffect(() => {
     if (!depositTouched && suggestedDeposit !== null) {
       setTerms(t => ({ ...t, deposit: suggestedDeposit.toFixed(2).replace('.', ',') }))
@@ -179,7 +180,7 @@ export function RentalContractDialog({ open, onOpenChange, tenancyId, propertyId
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto p-0">
+      <DialogContent className="sm:max-w-2xl max-h-[90dvh] overflow-y-auto p-0 w-full">
         {/* Header with brass accent */}
         <div className="relative px-6 pt-6 pb-4 border-b border-border">
           <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-brass-400 via-brass-500 to-brass-400 rounded-t-xl" />
@@ -201,7 +202,7 @@ export function RentalContractDialog({ open, onOpenChange, tenancyId, propertyId
         {loading ? (
           <div className="px-6 py-10 text-center text-sm text-muted-foreground">Lade Daten…</div>
         ) : (
-          <div className="px-6 py-5 space-y-6">
+          <div className="px-4 sm:px-6 py-5 space-y-6">
             {/* Template Auswahl — nur anzeigen wenn der Nutzer eigene Vorlagen hat */}
             {templates.length > 0 && (
               <div className="rounded-xl border border-border bg-muted/30 p-3 space-y-2">
@@ -319,9 +320,9 @@ export function RentalContractDialog({ open, onOpenChange, tenancyId, propertyId
                 </Field>
               </div>
               {totalRent !== null && (
-                <div className="rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 px-4 py-3 flex items-center justify-between">
+                <div className="rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 px-4 py-3 flex items-center justify-between gap-2">
                   <span className="text-xs font-medium text-emerald-800 dark:text-emerald-300 uppercase tracking-wide">Gesamtmiete monatlich</span>
-                  <span className="font-heading text-lg text-emerald-900 dark:text-emerald-100">{fmtEuro(totalRent)}</span>
+                  <span className="font-heading text-lg text-emerald-900 dark:text-emerald-100 whitespace-nowrap">{fmtEuro(totalRent)}</span>
                 </div>
               )}
               <Field label="Fälligkeitstag" hint="Werktag im Monat, bis zu dem die Miete spätestens eingeht">
@@ -337,12 +338,38 @@ export function RentalContractDialog({ open, onOpenChange, tenancyId, propertyId
 
             {/* Kaution */}
             <Section icon={Shield} title="Kaution" eyebrow="Abschnitt 4/4">
+              {/* Multiplikator-Auswahl */}
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">Anzahl Kaltmieten</Label>
+                <div className="flex gap-2">
+                  {([1, 2, 3] as const).map(m => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => {
+                        setDepositMultiplier(m)
+                        setDepositTouched(false)
+                      }}
+                      className={cn(
+                        'flex-1 rounded-lg border py-2 text-sm font-medium transition-colors',
+                        depositMultiplier === m
+                          ? 'border-brass-500 bg-brass-50 dark:bg-brass-900/30 text-brass-800 dark:text-brass-200'
+                          : 'border-border bg-background text-muted-foreground hover:bg-muted'
+                      )}
+                    >
+                      {m}×
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-snug">Maximal 3 Monatskaltmieten (§ 551 BGB)</p>
+              </div>
+
               <Field
                 label="Kautionsbetrag (€)"
                 hint={
                   suggestedDeposit !== null && !depositTouched
-                    ? `Vorschlag: ${fmtEuro(suggestedDeposit)} (3× Kaltmiete, gesetzliches Maximum)`
-                    : 'Maximal 3 Monatskaltmieten (§ 551 BGB)'
+                    ? `Automatisch: ${fmtEuro(suggestedDeposit)} (${depositMultiplier}× Kaltmiete)`
+                    : undefined
                 }
               >
                 <div className="relative">
@@ -364,11 +391,11 @@ export function RentalContractDialog({ open, onOpenChange, tenancyId, propertyId
           </div>
         )}
 
-        <DialogFooter className="px-6 py-4">
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
+        <DialogFooter className="px-4 sm:px-6 py-4 flex-col-reverse sm:flex-row gap-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting} className="w-full sm:w-auto">
             Abbrechen
           </Button>
-          <Button onClick={handleSubmit} disabled={submitting || loading} className="gap-1.5">
+          <Button onClick={handleSubmit} disabled={submitting || loading} className="gap-1.5 w-full sm:w-auto">
             {submitting ? 'Wird erstellt…' : (<><FileSignature className="h-4 w-4" /> Mietvertrag erstellen</>)}
           </Button>
         </DialogFooter>
@@ -399,7 +426,7 @@ function Section({
           <h3 className="font-heading text-sm text-foreground leading-tight">{title}</h3>
         </div>
       </div>
-      <div className={cn('space-y-3 pl-10')}>{children}</div>
+      <div className={cn('space-y-3 pl-0 sm:pl-10')}>{children}</div>
     </section>
   )
 }
