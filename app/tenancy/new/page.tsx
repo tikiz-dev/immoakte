@@ -10,7 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { AddressAutocomplete } from '@/components/AddressAutocomplete'
 import { toast } from 'sonner'
-import { ArrowLeft, ArrowRight, Loader2, User, Home } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Loader2, User, Home, FileText } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
 
 export default function NewTenancy() {
   const { user, loading: authLoading } = useAuth()
@@ -38,9 +39,10 @@ export default function NewTenancy() {
     city: '',
   })
 
+  const supabase = createClient()
   const set = (key: string, value: string) => setForm(f => ({ ...f, [key]: value }))
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent, mode: 'hub' | 'protocol' = 'hub') => {
     e.preventDefault()
     if (step === 1) { setStep(2); return }
 
@@ -51,10 +53,37 @@ export default function NewTenancy() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       })
-      const { tenancy, error } = await res.json()
+      const { tenancy, property, error } = await res.json()
       if (error) throw new Error(error)
-      toast.success('Mietverhältnis angelegt')
-      router.push(`/tenancy/${tenancy.id}`)
+
+      if (mode === 'protocol') {
+        // Create Einzug protocol directly and navigate to it
+        const { data: proto, error: protoErr } = await supabase.from('protocols').insert({
+          tenancy_id: tenancy.id,
+          property_id: property.id,
+          owner_id: user!.id,
+          tenant_salutation: form.tenant_salutation,
+          tenant_first_name: form.tenant_first_name,
+          tenant_last_name: form.tenant_last_name,
+          tenant_email: form.tenant_email || null,
+          tenant_phone: form.tenant_phone || null,
+          date: new Date().toISOString(),
+          type: 'Einzug',
+          status: 'draft',
+          rooms: [],
+          meters: [
+            { id: crypto.randomUUID(), type: 'Strom', number: '', reading: '', photoUrl: '' },
+            { id: crypto.randomUUID(), type: 'Wasser', number: '', reading: '', photoUrl: '' },
+          ],
+          keys: [],
+        }).select().single()
+        if (protoErr) throw protoErr
+        toast.success('Einzugsprotokoll erstellt')
+        router.push(`/protocol/${proto.id}`)
+      } else {
+        toast.success('Mietverhältnis angelegt')
+        router.push(`/tenancy/${tenancy.id}`)
+      }
     } catch (err: any) {
       toast.error('Fehler: ' + (err.message || 'Unbekannter Fehler'))
     } finally {
@@ -226,14 +255,30 @@ export default function NewTenancy() {
                 </div>
               )}
 
-              <div className="mt-8 flex justify-between">
+              <div className="mt-8 flex justify-between items-center">
                 {step > 1 ? (
                   <Button type="button" variant="outline" onClick={() => setStep(1)}>Zurück</Button>
                 ) : <div />}
-                <Button type="submit" disabled={loading}>
-                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {step === 1 ? (<>Weiter <ArrowRight className="ml-2 h-4 w-4" /></>) : 'Mietverhältnis anlegen'}
-                </Button>
+
+                {step === 1 ? (
+                  <Button type="submit" disabled={loading}>
+                    Weiter <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                ) : (
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <Button type="button" variant="outline" disabled={loading}
+                      onClick={(e) => handleSubmit(e as any, 'hub')}>
+                      {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Nur Mietverhältnis anlegen
+                    </Button>
+                    <Button type="button" disabled={loading}
+                      onClick={(e) => handleSubmit(e as any, 'protocol')}>
+                      {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      <FileText className="mr-2 h-4 w-4" />
+                      Direkt Einzugsprotokoll erstellen
+                    </Button>
+                  </div>
+                )}
               </div>
             </form>
           </CardContent>
