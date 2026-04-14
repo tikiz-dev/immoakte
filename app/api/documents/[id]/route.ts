@@ -37,7 +37,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
   const body = await request.json()
   // Only allow safe user-editable fields — never owner_id, tenancy_id, etc.
-  const allowed = ['name', 'content', 'status', 'finalized_at'] as const
+  const allowed = ['name', 'content', 'status', 'finalized_at', 'signature_mode', 'signatures'] as const
   const updates: Partial<Record<typeof allowed[number], unknown>> = {}
   for (const key of allowed) {
     if (key in body) updates[key] = body[key]

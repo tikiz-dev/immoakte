@@ -4,6 +4,8 @@ import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import TextAlign from '@tiptap/extension-text-align'
 import Placeholder from '@tiptap/extension-placeholder'
+import Image from '@tiptap/extension-image'
+import { SignatureBlock } from './editor/SignatureBlockNode'
 import {
   Bold, Italic, UnderlineIcon, AlignLeft, AlignCenter, AlignRight,
   Heading1, Heading2, List, ListOrdered, Undo, Redo
@@ -46,6 +48,8 @@ export function DocumentEditor({ content, onChange, readOnly = false, placeholde
       StarterKit,
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
       Placeholder.configure({ placeholder: placeholder || 'Dokument bearbeiten...' }),
+      Image.configure({ inline: false, allowBase64: true }),
+      SignatureBlock,
     ],
     content,
     editable: !readOnly,

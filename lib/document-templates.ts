@@ -88,9 +88,11 @@ export const DEFAULT_TEMPLATES: Record<string, { name: string; type: string; con
 <hr>
 <p>Ort, Datum: _________________________, {{datum_heute}}</p>
 <br>
-<p>_________________________________<br>
-Unterschrift Wohnungsgeber<br>
-{{vermieter_name}}</p>`,
+<div data-signature="vermieter" style="min-height:48px;margin-bottom:-2px;"></div>
+<p style="border-top:1px solid #222;padding-top:6px;margin-top:0;max-width:320px;">
+<strong>Unterschrift Wohnungsgeber</strong><br>
+<span style="color:#666;">{{vermieter_name}}</span>
+</p>`,
   },
 
   kautionsbescheinigung: {
@@ -112,9 +114,11 @@ Unterschrift Wohnungsgeber<br>
 <hr>
 <p>Ort, Datum: _________________________, {{datum_heute}}</p>
 <br>
-<p>_________________________________<br>
-Unterschrift Vermieter<br>
-{{vermieter_name}}</p>`,
+<div data-signature="vermieter" style="min-height:48px;margin-bottom:-2px;"></div>
+<p style="border-top:1px solid #222;padding-top:6px;margin-top:0;max-width:320px;">
+<strong>Unterschrift Vermieter</strong><br>
+<span style="color:#666;">{{vermieter_name}}</span>
+</p>`,
   },
 
   mietvertrag: {
@@ -206,13 +210,15 @@ Bank: {{vermieter_bank}}</p>
 <tbody>
 <tr>
 <td style="width:50%;padding:0 12px 0 0;vertical-align:top;">
-<p style="border-top:1px solid #222;padding-top:6px;margin-top:40px;">
+<div data-signature="vermieter" style="min-height:48px;margin-bottom:-2px;"></div>
+<p style="border-top:1px solid #222;padding-top:6px;margin-top:0;">
 <strong>Vermieter</strong><br>
 <span style="color:#666;">{{vermieter_name}}</span>
 </p>
 </td>
 <td style="width:50%;padding:0 0 0 12px;vertical-align:top;">
-<p style="border-top:1px solid #222;padding-top:6px;margin-top:40px;">
+<div data-signature="mieter" style="min-height:48px;margin-bottom:-2px;"></div>
+<p style="border-top:1px solid #222;padding-top:6px;margin-top:0;">
 <strong>Mieter</strong><br>
 <span style="color:#666;">{{mieter_name}}</span>
 </p>

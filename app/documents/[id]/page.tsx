@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { DocumentEditor } from '@/components/DocumentEditor'
+import { SignDialog, type SignResult } from '@/components/documents/SignDialog'
 import { toast } from 'sonner'
 import {
   ArrowLeft, Save, Download, CheckCircle2, FileText,
@@ -41,6 +42,7 @@ export default function DocumentPage() {
   const [saveTplOpen, setSaveTplOpen] = useState(false)
   const [tplName, setTplName] = useState('')
   const [savingTpl, setSavingTpl] = useState(false)
+  const [signOpen, setSignOpen] = useState(false)
 
   useEffect(() => {
     if (!user) { router.replace('/login'); return }
@@ -62,12 +64,14 @@ export default function DocumentPage() {
       })
   }, [id, user])
 
-  const save = useCallback(async (opts?: { finalize?: boolean }) => {
+  const save = useCallback(async (opts?: { finalize?: boolean; contentOverride?: string; signatures?: any; signatureMode?: string }) => {
     setSaving(true)
-    const updates: any = { name, content }
+    const updates: any = { name, content: opts?.contentOverride ?? content }
     if (opts?.finalize) {
       updates.status = 'final'
       updates.finalized_at = new Date().toISOString()
+      if (opts.signatureMode) updates.signature_mode = opts.signatureMode
+      if (opts.signatures) updates.signatures = opts.signatures
     }
     const res = await fetch(`/api/documents/${id}`, {
       method: 'PATCH',
@@ -76,8 +80,15 @@ export default function DocumentPage() {
     })
     if (res.ok) {
       setIsDirty(false)
+      if (opts?.contentOverride) setContent(opts.contentOverride)
       if (opts?.finalize) {
-        setDoc((prev: any) => ({ ...prev, status: 'final', finalized_at: updates.finalized_at }))
+        setDoc((prev: any) => ({
+          ...prev,
+          status: 'final',
+          finalized_at: updates.finalized_at,
+          signature_mode: updates.signature_mode ?? prev.signature_mode,
+          signatures: updates.signatures ?? prev.signatures,
+        }))
         toast.success('Dokument abgeschlossen')
       } else {
         toast.success('Gespeichert')
@@ -87,6 +98,50 @@ export default function DocumentPage() {
     }
     setSaving(false)
   }, [id, name, content])
+
+  /** Embeds signature images into the HTML content at markers like <div data-signature="vermieter"> */
+  const embedSignatures = (html: string, sigs: Record<string, string>): string => {
+    if (typeof window === 'undefined') return html
+    const doc = new DOMParser().parseFromString(html, 'text/html')
+    Object.entries(sigs).forEach(([key, dataUrl]) => {
+      const markers = doc.querySelectorAll(`[data-signature="${key}"]`)
+      markers.forEach(el => {
+        el.innerHTML = `<img src="${dataUrl}" alt="Unterschrift ${key}" style="max-height:56px;max-width:200px;display:block;margin:0;" />`
+      })
+    })
+    return doc.body.innerHTML
+  }
+
+  const handleSignComplete = async (result: SignResult) => {
+    if (result.mode === 'handwritten') {
+      await save({ finalize: true, signatureMode: 'handwritten', signatures: {} })
+      return
+    }
+    // Digital: embed images into content
+    const signedAt = new Date().toISOString()
+    const newContent = embedSignatures(content, result.signatures)
+    const meta = Object.keys(result.signatures).reduce<Record<string, any>>((acc, key) => {
+      acc[key] = { signed_at: signedAt }
+      return acc
+    }, {})
+    await save({
+      finalize: true,
+      contentOverride: newContent,
+      signatureMode: 'digital',
+      signatures: meta,
+    })
+  }
+
+  const signParties = useMemo(() => {
+    const hasTenant = !!doc?.tenant_first_name
+    if (doc?.type === 'kautionsbescheinigung' || doc?.type === 'wohnungsgeberbestaetigung') {
+      return [{ key: 'vermieter', label: 'Vermieter / Vermieterin', hint: 'Ihre Unterschrift' }]
+    }
+    return [
+      { key: 'vermieter', label: 'Vermieter / Vermieterin', hint: 'Ihre Unterschrift' },
+      { key: 'mieter', label: 'Mieter / Mieterin', hint: hasTenant ? `${doc?.tenant_first_name || ''} ${doc?.tenant_last_name || ''}`.trim() : 'Unterschrift Mieter' },
+    ]
+  }, [doc?.type, doc?.tenant_first_name, doc?.tenant_last_name])
 
   const handleDelete = async () => {
     const res = await fetch(`/api/documents/${id}`, { method: 'DELETE' })
@@ -236,8 +291,16 @@ export default function DocumentPage() {
                 <Button variant="outline" size="icon" onClick={() => save()} disabled={saving || !isDirty} title="Speichern">
                   <Save className="h-4 w-4" />
                 </Button>
-                {/* Finalize: icon + short label on sm+ */}
-                <Button size="sm" onClick={() => save({ finalize: true })} disabled={saving} className="gap-1.5">
+                {/* Finalize: opens sign dialog */}
+                <Button
+                  size="sm"
+                  onClick={async () => {
+                    if (isDirty) await save()
+                    setSignOpen(true)
+                  }}
+                  disabled={saving}
+                  className="gap-1.5"
+                >
                   <CheckCircle2 className="h-3.5 w-3.5" />
                   <span className="hidden sm:inline">{saving ? 'Speichert…' : 'Abschließen'}</span>
                 </Button>
@@ -366,6 +429,15 @@ export default function DocumentPage() {
           )}
         </div>
       </main>
+
+      {/* Sign & Finalize Dialog */}
+      <SignDialog
+        open={signOpen}
+        onOpenChange={setSignOpen}
+        docType={doc?.type || 'sonstiges'}
+        parties={signParties}
+        onComplete={handleSignComplete}
+      />
 
       {/* Save as Template Dialog */}
       <Dialog open={saveTplOpen} onOpenChange={setSaveTplOpen}>
