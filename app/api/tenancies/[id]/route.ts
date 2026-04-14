@@ -41,12 +41,21 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   const { id } = await params
 
   const { data: existing } = await supabaseAdmin
-    .from('tenancies').select('owner_id').eq('id', id).single()
+    .from('tenancies').select('owner_id, property_id').eq('id', id).single()
   if (!existing || existing.owner_id !== user.id)
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const updates = await request.json()
-  const { error } = await supabaseAdmin.from('tenancies').update(updates).eq('id', id)
+  const { street, house_number, zip_code, city, ...tenancyUpdates } = updates
+
+  const { error } = await supabaseAdmin.from('tenancies').update(tenancyUpdates).eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // Update property address if provided
+  if (existing.property_id && (street !== undefined || house_number !== undefined || zip_code !== undefined || city !== undefined)) {
+    const address = `${street || ''} ${house_number || ''}, ${zip_code || ''} ${city || ''}`.trim()
+    await supabaseAdmin.from('properties').update({ street, house_number, zip_code, city, address }).eq('id', existing.property_id)
+  }
+
   return NextResponse.json({ success: true })
 }

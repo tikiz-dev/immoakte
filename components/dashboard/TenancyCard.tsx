@@ -106,9 +106,9 @@ export function TenancyCard({ group, userId, onDelete, onDuplicate, onAuszugCrea
 
   const loadDocuments = async () => {
     if (docsLoaded) return
-    const protocolId = group.einzug?.id
-    if (!protocolId) return
-    const res = await fetch(`/api/documents?protocol_id=${protocolId}`)
+    const tenancyId = group.tenancyId || group.einzug?.id
+    if (!tenancyId) return
+    const res = await fetch(`/api/documents?tenancy_id=${tenancyId}`)
     const { documents } = await res.json()
     setDocuments(documents || [])
     setDocsLoaded(true)
@@ -122,7 +122,7 @@ export function TenancyCard({ group, userId, onDelete, onDuplicate, onAuszugCrea
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         type,
-        protocol_id: group.einzug?.id || null,
+        tenancy_id: group.tenancyId || group.einzug?.id || null,
         property_id: group.einzug?.property_id || null,
       }),
     })
@@ -160,8 +160,8 @@ export function TenancyCard({ group, userId, onDelete, onDuplicate, onAuszugCrea
     router.push(`/protocol/${data.id}`)
   }
 
-  // Load docs when card mounts if einzug exists
-  useState(() => { if (group.einzug) loadDocuments() })
+  // Load docs when card mounts if tenancy exists
+  useState(() => { if (group.tenancyId || group.einzug) loadDocuments() })
 
   return (
     <Card

@@ -33,6 +33,7 @@ interface Protocol {
 
 interface TenancyGroup {
   id: string
+  tenancyId?: string
   tenantName: string
   propertyAddress?: string
   einzug?: Protocol
@@ -69,45 +70,34 @@ export default function Dashboard() {
       setUnresolvedFeedbackCount(count || 0)
     }
 
-    const { data: fetchedProtocols, error } = await supabase
-      .from('protocols').select('*').eq('owner_id', user!.id).order('created_at', { ascending: false })
-    if (error) { setLoading(false); return }
+    // Fetch tenancies (primary source of truth) and protocols in parallel
+    const [tenanciesRes, protocolsRes] = await Promise.all([
+      fetch('/api/tenancies').then(r => r.json()),
+      supabase.from('protocols').select('*').eq('owner_id', user!.id).order('created_at', { ascending: false }),
+    ])
 
-    const propertyIds = [...new Set((fetchedProtocols || []).map(p => p.property_id).filter(Boolean))]
-    const propertiesMap: Record<string, string> = {}
-    if (propertyIds.length > 0) {
-      const { data: properties } = await supabase
-        .from('properties').select('id, address, street, house_number, zip_code, city').in('id', propertyIds)
-      properties?.forEach(p => {
-        propertiesMap[p.id] = p.address || `${p.street || ''} ${p.house_number || ''}, ${p.zip_code || ''} ${p.city || ''}`.trim()
-      })
-    }
+    const fetchedTenancies = tenanciesRes.tenancies || []
+    const fetchedProtocols = protocolsRes.data || []
 
-    const protocols = (fetchedProtocols || []).map(p => ({
-      ...p,
-      propertyAddress: propertiesMap[p.property_id] || 'Unbekannte Adresse',
-    }))
+    const groups: TenancyGroup[] = fetchedTenancies.map((t: any) => {
+      const prop = t.properties
+      const address = prop?.address || `${prop?.street || ''} ${prop?.house_number || ''}, ${prop?.zip_code || ''} ${prop?.city || ''}`.trim()
 
-    const groups: Record<string, TenancyGroup> = {}
-    protocols.forEach(p => {
-      const tenantName = `${p.tenant_first_name || ''} ${p.tenant_last_name || ''}`.trim() || 'Unbekannter Mieter'
-      if (p.type === 'Einzug' || (!p.linked_protocol_id && p.type === 'Auszug')) {
-        groups[p.id] = {
-          id: p.id,
-          tenantName,
-          propertyAddress: p.propertyAddress,
-          einzug: p.type === 'Einzug' ? p : undefined,
-          auszug: p.type === 'Auszug' ? p : undefined,
-        }
-      }
-    })
-    protocols.forEach(p => {
-      if (p.type === 'Auszug' && p.linked_protocol_id && groups[p.linked_protocol_id]) {
-        groups[p.linked_protocol_id].auszug = p
+      const tProtos = fetchedProtocols.filter((p: any) => p.tenancy_id === t.id)
+      const einzug = tProtos.find((p: any) => p.type === 'Einzug')
+      const auszug = tProtos.find((p: any) => p.type === 'Auszug')
+
+      return {
+        id: t.id,
+        tenancyId: t.id,
+        tenantName: `${t.tenant_first_name || ''} ${t.tenant_last_name || ''}`.trim() || 'Unbekannter Mieter',
+        propertyAddress: address || 'Unbekannte Adresse',
+        einzug: einzug ? { ...einzug, propertyAddress: address } : undefined,
+        auszug: auszug ? { ...auszug, propertyAddress: address } : undefined,
       }
     })
 
-    setTenancies(Object.values(groups))
+    setTenancies(groups)
     setLoading(false)
   }
 
@@ -134,7 +124,7 @@ export default function Dashboard() {
         if (ng.einzug?.id === protocolToDelete) ng.einzug = undefined
         if (ng.auszug?.id === protocolToDelete) ng.auszug = undefined
         return ng
-      }).filter(g => g.einzug || g.auszug)
+      })
     )
     setIsDeleteDialogOpen(false)
     setProtocolToDelete(null)
