@@ -306,6 +306,22 @@
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+/* Gentle vertical float for the hero phone annotation pills. Two directions
+   so the pair doesn't bob in perfect lock-step. */
+@keyframes hero-pill-float-up {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-6px); }
+}
+@keyframes hero-pill-float-down {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(5px); }
+}
+.hero-pill-float-up {
+  animation: hero-pill-float-up 4.5s ease-in-out infinite;
+}
+.hero-pill-float-down {
+  animation: hero-pill-float-down 4.5s ease-in-out infinite;
+}
 
 /* ===== Motion utilities ===== */
 @layer utilities {
@@ -324,6 +340,21 @@
   .hover-lift:hover {
     transform: translateY(-2px);
   }
+}
+
+/* Tiptap editor — placeholder + caret colors that respect dark mode */
+.document-editor-content .ProseMirror {
+  color: var(--foreground);
+  caret-color: var(--foreground);
+  min-height: 400px;
+}
+.document-editor-content .ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: var(--muted-foreground);
+  opacity: 0.6;
+  pointer-events: none;
+  height: 0;
 }
 
 /* Motion-reduced: kill non-essential transforms */

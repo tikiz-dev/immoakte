@@ -11,9 +11,10 @@ import { useAuth } from '@/contexts/AuthContext'
 import Header from '@/components/layout/Header'
 import Footer from '@/components/layout/Footer'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
-import { PhoneFrame } from '@/components/brand/PhoneFrame'
-import { ProtocolMockup } from '@/components/brand/ProtocolMockup'
+import { useEffect, useRef, useState } from 'react'
+import { HeroPhoneCarousel } from '@/components/brand/HeroPhoneCarousel'
+import { Reveal, RevealStagger, RevealItem } from '@/components/brand/Reveal'
+import { motion, useInView } from 'motion/react'
 import { Badge } from '@/components/ui/badge'
 
 export default function Landing() {
@@ -54,21 +55,45 @@ function Hero() {
 
       <div className="mx-auto max-w-6xl px-4 sm:px-6 pt-16 pb-24 sm:pt-24 sm:pb-32">
         <div className="grid lg:grid-cols-[1.1fr_1fr] gap-12 lg:gap-16 items-center">
-          {/* Left: Copy */}
+          {/* Left: Copy — individual entrance animations for reliable playback */}
           <div className="max-w-xl">
-            <span className="inline-flex items-center gap-2 rounded-full border border-brass-300/60 bg-brass-50 px-3.5 py-1 text-xs font-semibold text-brass-800 dark:bg-brass-900/30 dark:border-brass-700/40 dark:text-brass-200">
+            <motion.span
+              initial={{ opacity: 0, y: 14 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1], delay: 0.05 }}
+              className="inline-flex items-center gap-2 rounded-full border border-brass-300/60 bg-brass-50 px-3.5 py-1 text-xs font-semibold text-brass-800 dark:bg-brass-900/30 dark:border-brass-700/40 dark:text-brass-200"
+            >
               <Sparkles className="h-3.5 w-3.5" />
               Kostenlos starten · kein Abo nötig
-            </span>
-            <h1 className="mt-6 font-heading text-5xl sm:text-6xl lg:text-[72px] leading-[0.98] tracking-[-0.02em] text-foreground">
+            </motion.span>
+            <motion.h1
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1], delay: 0.13 }}
+              className="mt-6 font-heading text-5xl sm:text-6xl lg:text-[72px] leading-[0.98] tracking-[-0.02em] text-foreground"
+            >
               Die digitale Akte{' '}
               <span className="italic text-brass-700 dark:text-brass-300">für jedes</span>{' '}
               Mietverhältnis.
-            </h1>
-            <p className="mt-6 text-lg text-muted-foreground leading-relaxed max-w-lg">
+            </motion.h1>
+            <motion.p
+              initial={{ opacity: 0, y: 16 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1], delay: 0.22 }}
+              className="mt-6 text-lg text-muted-foreground leading-relaxed max-w-lg"
+            >
               Mietvertrag, Einzugsprotokoll, Wohnungsgeberbestätigung, Kautionsbescheinigung, Auszugsprotokoll — alles in einer App. Rechtssicher, strukturiert, fertig als PDF.
-            </p>
-            <div className="mt-9 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            </motion.p>
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5, delay: 0.32 }}
+              className="mt-9 flex flex-col sm:flex-row items-stretch sm:items-center gap-3"
+            >
               <Link href="/login?mode=signup">
                 <Button size="lg" className="h-12 px-6 text-[15px] shadow-ink hover:shadow-lg transition-shadow">
                   Kostenlos starten
@@ -80,8 +105,14 @@ function Hero() {
                   Preise ansehen
                 </Button>
               </Link>
-            </div>
-            <ul className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">
+            </motion.div>
+            <motion.ul
+              initial={{ opacity: 0 }}
+              whileInView={{ opacity: 1 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.4, delay: 0.42 }}
+              className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground"
+            >
               <li className="inline-flex items-center gap-1.5">
                 <CheckCircle2 className="h-4 w-4 text-emerald-600" /> Keine Kreditkarte nötig
               </li>
@@ -91,25 +122,18 @@ function Hero() {
               <li className="inline-flex items-center gap-1.5">
                 <CheckCircle2 className="h-4 w-4 text-emerald-600" /> Sofort einsatzbereit
               </li>
-            </ul>
+            </motion.ul>
           </div>
 
-          {/* Right: Phone mockup */}
-          <div className="relative flex justify-center lg:justify-end">
+          {/* Right: Phone mockup cycling through real app screens.
+               Annotation pills live INSIDE the carousel — they swap with the
+               current screen and stay pinned to the phone.
+               Note: we center (not flush-right) on desktop so the right-side
+               pill has room to breathe without overflowing the viewport. */}
+          <div className="relative flex justify-center lg:justify-center lg:pr-8 xl:pr-16">
             {/* Soft brass glow behind phone */}
-            <div className="absolute inset-x-10 top-12 bottom-6 bg-brass-200/40 dark:bg-brass-500/10 rounded-full blur-3xl -z-10" />
-            <PhoneFrame tilt>
-              <ProtocolMockup />
-            </PhoneFrame>
-            {/* Floating annotation pills */}
-            <div className="hidden lg:flex absolute -left-2 top-24 items-center gap-2 bg-card border border-border rounded-full px-3 py-1.5 shadow-md">
-              <Camera className="h-3.5 w-3.5 text-brass-600" />
-              <span className="text-xs font-medium text-foreground">Fotos direkt erfassen</span>
-            </div>
-            <div className="hidden lg:flex absolute -right-4 bottom-32 items-center gap-2 bg-card border border-border rounded-full px-3 py-1.5 shadow-md">
-              <FileSignature className="h-3.5 w-3.5 text-brass-600" />
-              <span className="text-xs font-medium text-foreground">Digitale Unterschrift</span>
-            </div>
+            <div className="absolute inset-x-10 top-12 bottom-16 bg-brass-200/40 dark:bg-brass-500/10 rounded-full blur-3xl -z-10" />
+            <HeroPhoneCarousel />
           </div>
         </div>
       </div>
@@ -145,7 +169,7 @@ function VorherNachher() {
   return (
     <section className="py-24 sm:py-32">
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
-        <div className="text-center max-w-2xl mx-auto mb-16">
+        <Reveal className="text-center max-w-2xl mx-auto mb-16">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-brass-600 dark:text-brass-400 mb-3">
             Vom Zettel zur Akte
           </p>
@@ -155,11 +179,11 @@ function VorherNachher() {
           <p className="mt-5 text-lg text-muted-foreground leading-relaxed">
             Mietverträge in drei Ordnern, Protokolle auf dem Klemmbrett, Belege im Stapel. Das kostet Zeit — und Nerven. Es geht besser.
           </p>
-        </div>
+        </Reveal>
 
-        <div className="grid md:grid-cols-2 gap-6 lg:gap-10 items-stretch">
+        <RevealStagger className="grid md:grid-cols-2 gap-6 lg:gap-10 items-stretch" staggerChildren={0.15}>
           {/* VORHER */}
-          <div className="relative">
+          <RevealItem className="relative">
             <div className="absolute -top-3 left-6 z-10">
               <Badge variant="outline" className="bg-background">Vorher</Badge>
             </div>
@@ -175,10 +199,10 @@ function VorherNachher() {
                 </ul>
               </div>
             </div>
-          </div>
+          </RevealItem>
 
           {/* NACHHER */}
-          <div className="relative">
+          <RevealItem className="relative">
             <div className="absolute -top-3 left-6 z-10">
               <Badge variant="brass">Mit ImmoAkte</Badge>
             </div>
@@ -194,8 +218,8 @@ function VorherNachher() {
                 </ul>
               </div>
             </div>
-          </div>
-        </div>
+          </RevealItem>
+        </RevealStagger>
       </div>
     </section>
   )
@@ -307,27 +331,39 @@ function HowItWorks() {
   return (
     <section className="py-24 sm:py-28 bg-muted/40 border-y border-border">
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
-        <div className="text-center max-w-2xl mx-auto mb-16">
+        <Reveal className="text-center max-w-2xl mx-auto mb-16">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-brass-600 dark:text-brass-400 mb-3">
             So einfach geht's
           </p>
           <h2 className="font-heading text-4xl sm:text-5xl tracking-tight text-foreground leading-[1.05]">
             Drei Schritte. Kein Schreibtisch nötig.
           </h2>
-        </div>
-        <div className="grid gap-6 md:grid-cols-3">
-          {steps.map((s) => (
-            <div key={s.n} className="relative group">
-              <div className="h-full rounded-2xl border border-border bg-card p-7 shadow-xs hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5">
-                <span className="font-heading text-[40px] text-brass-400/80 dark:text-brass-500/70 leading-none">{s.n}</span>
-                <div className="mt-5 h-11 w-11 rounded-xl bg-ink-50 dark:bg-ink-800/40 flex items-center justify-center">
-                  <s.icon className="h-5 w-5 text-ink-700 dark:text-brass-300" />
+        </Reveal>
+        <div className="relative">
+          {/* Animated progress line connecting the 3 step cards on desktop.
+              Draws from left to right when the steps enter the viewport. */}
+          <motion.div
+            initial={{ scaleX: 0 }}
+            whileInView={{ scaleX: 1 }}
+            viewport={{ once: false, amount: 0.4 }}
+            transition={{ duration: 1.8, ease: [0.22, 1, 0.36, 1] }}
+            style={{ transformOrigin: 'left' }}
+            className="hidden md:block absolute top-[88px] left-[16%] right-[16%] h-px bg-gradient-to-r from-transparent via-brass-400/70 to-transparent pointer-events-none"
+          />
+          <RevealStagger className="grid gap-6 md:grid-cols-3" staggerChildren={0.18}>
+            {steps.map((s) => (
+              <RevealItem key={s.n} className="relative group">
+                <div className="h-full rounded-2xl border border-border bg-card p-7 shadow-xs hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5">
+                  <span className="font-heading text-[40px] text-brass-400/80 dark:text-brass-500/70 leading-none">{s.n}</span>
+                  <div className="mt-5 h-11 w-11 rounded-xl bg-ink-50 dark:bg-ink-800/40 flex items-center justify-center">
+                    <s.icon className="h-5 w-5 text-ink-700 dark:text-brass-300" />
+                  </div>
+                  <h3 className="mt-5 font-heading text-xl text-foreground">{s.title}</h3>
+                  <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{s.desc}</p>
                 </div>
-                <h3 className="mt-5 font-heading text-xl text-foreground">{s.title}</h3>
-                <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{s.desc}</p>
-              </div>
-            </div>
-          ))}
+              </RevealItem>
+            ))}
+          </RevealStagger>
         </div>
       </div>
     </section>
@@ -365,17 +401,17 @@ function FeatureDeepDive() {
   return (
     <section className="py-24 sm:py-32">
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
-        <div className="text-center max-w-2xl mx-auto mb-20">
+        <Reveal className="text-center max-w-2xl mx-auto mb-20">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-brass-600 dark:text-brass-400 mb-3">
             Was drin ist
           </p>
           <h2 className="font-heading text-4xl sm:text-5xl tracking-tight text-foreground leading-[1.05]">
             Alles, was eine vollständige Mieterakte braucht.
           </h2>
-        </div>
+        </Reveal>
         <div className="space-y-20 sm:space-y-28">
           {features.map((f, i) => (
-            <div key={i} className={`grid lg:grid-cols-2 gap-10 lg:gap-16 items-center ${i % 2 === 1 ? 'lg:[&>*:first-child]:order-2' : ''}`}>
+            <Reveal key={i} y={32} duration={0.7} className={`grid lg:grid-cols-2 gap-10 lg:gap-16 items-center ${i % 2 === 1 ? 'lg:[&>*:first-child]:order-2' : ''}`}>
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-brass-600 dark:text-brass-400 mb-3">{f.kicker}</p>
                 <h3 className="font-heading text-3xl sm:text-4xl tracking-tight text-foreground leading-[1.1]">{f.title}</h3>
@@ -392,7 +428,7 @@ function FeatureDeepDive() {
                 </ul>
               </div>
               <FeatureVisual kind={i} />
-            </div>
+            </Reveal>
           ))}
         </div>
       </div>
@@ -407,36 +443,78 @@ function FeatureVisual({ kind }: { kind: number }) {
 }
 
 function RoomsVisual() {
+  const rooms = [
+    { name: 'Wohnzimmer', status: 'final' as const, label: 'OK' },
+    { name: 'Küche', status: 'alert' as const, label: '2 Mängel' },
+    { name: 'Schlafzimmer', status: 'final' as const, label: 'OK' },
+    { name: 'Badezimmer', status: 'alert' as const, label: '1 Mangel' },
+    { name: 'Flur', status: 'final' as const, label: 'OK' },
+  ]
   return (
     <div className="relative rounded-3xl border border-border bg-gradient-to-br from-muted/60 to-background p-6 sm:p-8 shadow-md overflow-hidden">
       <div className="absolute inset-0 bg-ledger opacity-30 pointer-events-none" />
-      <div className="relative space-y-3">
-        {[
-          { name: 'Wohnzimmer', status: 'final' as const, label: 'OK' },
-          { name: 'Küche', status: 'alert' as const, label: '2 Mängel' },
-          { name: 'Schlafzimmer', status: 'final' as const, label: 'OK' },
-          { name: 'Badezimmer', status: 'alert' as const, label: '1 Mangel' },
-          { name: 'Flur', status: 'final' as const, label: 'OK' },
-        ].map((r) => (
-          <div key={r.name} className="flex items-center justify-between bg-card rounded-xl border border-border px-4 py-3 shadow-xs">
+      <motion.div
+        className="relative space-y-3"
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: false, amount: 0.3 }}
+        variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.18, delayChildren: 0.15 } } }}
+      >
+        {rooms.map((r) => (
+          <motion.div
+            key={r.name}
+            variants={{ hidden: { opacity: 0, x: -24 }, visible: { opacity: 1, x: 0, transition: { duration: 0.75, ease: [0.22, 1, 0.36, 1] } } }}
+            className="flex items-center justify-between bg-card rounded-xl border border-border px-4 py-3 shadow-xs"
+          >
             <div className="flex items-center gap-3">
               <HomeIcon className="h-4 w-4 text-muted-foreground" />
               <span className="text-sm font-medium text-foreground">{r.name}</span>
             </div>
             <Badge variant={r.status} size="sm">{r.label}</Badge>
-          </div>
+          </motion.div>
         ))}
-      </div>
+      </motion.div>
     </div>
   )
 }
 
+/** Digital-display counter — counts from 0 up to `target` over `duration` seconds
+ *  whenever it enters the viewport (fires once). */
+function CountUp({ target, duration = 2.4, className }: { target: number; duration?: number; className?: string }) {
+  const ref = useRef<HTMLSpanElement>(null)
+  // once: false — counter resets and counts up again each time the section
+  // re-enters the viewport. Duration is long enough (~2.4s) to actually be
+  // perceivable even on a fast scroll.
+  const inView = useInView(ref, { once: false, amount: 0.5 })
+  const [value, setValue] = useState(0)
+
+  useEffect(() => {
+    if (!inView) { setValue(0); return }
+    let raf: number
+    const start = performance.now()
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / (duration * 1000))
+      // ease-out cubic
+      const eased = 1 - Math.pow(1 - t, 3)
+      setValue(Math.round(target * eased))
+      if (t < 1) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [inView, target, duration])
+
+  // Format as "00.000" with a dot-thousand separator
+  const padded = value.toString().padStart(5, '0')
+  const formatted = `${padded.slice(0, -3)}.${padded.slice(-3)}`
+  return <span ref={ref} className={className}>{formatted}</span>
+}
+
 function MetersVisual() {
   const meters = [
-    { type: 'Strom', num: '1A3B-2024', reading: '08.214', icon: Zap, color: 'text-amber-600' },
-    { type: 'Wasser kalt', num: 'WK-992', reading: '00.432', icon: Zap, color: 'text-blue-600' },
-    { type: 'Wasser warm', num: 'WW-992', reading: '00.118', icon: Zap, color: 'text-red-600' },
-    { type: 'Gas', num: 'G-7741', reading: '04.081', icon: Zap, color: 'text-orange-600' },
+    { type: 'Strom',       num: '1A3B-2024', target: 8214, icon: Zap, color: 'text-amber-600' },
+    { type: 'Wasser kalt', num: 'WK-992',    target: 432,  icon: Zap, color: 'text-blue-600' },
+    { type: 'Wasser warm', num: 'WW-992',    target: 118,  icon: Zap, color: 'text-red-600' },
+    { type: 'Gas',         num: 'G-7741',    target: 4081, icon: Zap, color: 'text-orange-600' },
   ]
   return (
     <div className="relative rounded-3xl border border-border bg-gradient-to-br from-amber-50/50 via-background to-background p-6 sm:p-8 shadow-md overflow-hidden">
@@ -449,36 +527,76 @@ function MetersVisual() {
               </span>
               <span className="text-xs font-medium text-foreground">{m.type}</span>
             </div>
-            <p className="font-heading text-2xl tracking-tight text-foreground tabular-nums">{m.reading}</p>
+            <CountUp target={m.target} className="font-heading text-2xl tracking-tight text-foreground tabular-nums block" />
             <p className="text-[10px] text-muted-foreground mt-1">Nr. {m.num}</p>
           </div>
         ))}
       </div>
-      {/* Keys summary */}
-      <div className="relative mt-4 bg-card rounded-xl border border-border p-4 shadow-xs">
+      {/* Keys summary — staggered pills on scroll */}
+      <motion.div
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: false, amount: 0.4 }}
+        variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.18, delayChildren: 0.9 } } }}
+        className="relative mt-4 bg-card rounded-xl border border-border p-4 shadow-xs"
+      >
         <div className="flex items-center gap-2 mb-2">
           <Key className="h-4 w-4 text-brass-600" />
           <span className="text-xs font-medium text-foreground">Schlüsselübergabe</span>
         </div>
         <div className="flex flex-wrap gap-1.5">
           {['3× Haustür', '2× Wohnung', '1× Keller', '1× Briefkasten'].map((k) => (
-            <span key={k} className="text-[11px] px-2 py-0.5 rounded-full bg-muted text-foreground/80">{k}</span>
+            <motion.span
+              key={k}
+              variants={{ hidden: { opacity: 0, scale: 0.85 }, visible: { opacity: 1, scale: 1, transition: { duration: 0.55, ease: [0.22, 1, 0.36, 1] } } }}
+              className="text-[11px] px-2 py-0.5 rounded-full bg-muted text-foreground/80"
+            >
+              {k}
+            </motion.span>
           ))}
         </div>
-      </div>
+      </motion.div>
     </div>
   )
 }
 
 function SignatureVisual() {
+  const ref = useRef<HTMLDivElement>(null)
+  // Continuous loop while section is in view: draw → hold → erase → redraw.
+  // Total cycle ≈ 8s — the signatures are visible long enough to read, then
+  // gently erase and play again.
+  const inView = useInView(ref, { once: false, amount: 0.4 })
+
+  // pathLength keyframes: [empty, fully drawn, held fully drawn, erased].
+  // `times` distributes those frames across the duration: 25% draw, 60% hold,
+  // 15% erase.
+  const loopKeyframes = {
+    pathLength: [0, 1, 1, 0],
+    transition: {
+      duration: 8,
+      times: [0, 0.25, 0.85, 1],
+      ease: 'easeInOut' as const,
+      repeat: Infinity,
+    },
+  }
   return (
-    <div className="relative rounded-3xl border border-border bg-gradient-to-br from-brass-50/60 via-background to-background p-6 sm:p-8 shadow-md overflow-hidden">
+    <div ref={ref} className="relative rounded-3xl border border-border bg-gradient-to-br from-brass-50/60 via-background to-background p-6 sm:p-8 shadow-md overflow-hidden">
       <div className="absolute inset-0 bg-paper-grain pointer-events-none" />
       <div className="relative grid grid-cols-2 gap-4">
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-2">Vermieter</p>
           <svg viewBox="0 0 160 60" className="w-full h-14 border-b-2 border-foreground/70">
-            <path d="M 10 45 Q 20 20 30 35 T 60 30 Q 75 15 85 35 T 120 32 L 145 40" stroke="currentColor" className="text-ink-900 dark:text-foreground" strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+            <motion.path
+              d="M 10 45 Q 20 20 30 35 T 60 30 Q 75 15 85 35 T 120 32 L 145 40"
+              stroke="currentColor"
+              className="text-ink-900 dark:text-foreground"
+              strokeWidth="1.6"
+              fill="none"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              initial={{ pathLength: 0 }}
+              animate={inView ? loopKeyframes : { pathLength: 0 }}
+            />
           </svg>
           <p className="mt-2 text-xs text-foreground font-medium">Max Mustermann</p>
           <p className="text-[10px] text-muted-foreground">14.04.2026, 14:32 Uhr</p>
@@ -486,13 +604,31 @@ function SignatureVisual() {
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-2">Mieter</p>
           <svg viewBox="0 0 160 60" className="w-full h-14 border-b-2 border-foreground/70">
-            <path d="M 15 40 Q 25 10 40 30 Q 55 50 70 25 T 105 35 Q 120 15 135 38" stroke="currentColor" className="text-ink-900 dark:text-foreground" strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+            <motion.path
+              d="M 15 40 Q 25 10 40 30 Q 55 50 70 25 T 105 35 Q 120 15 135 38"
+              stroke="currentColor"
+              className="text-ink-900 dark:text-foreground"
+              strokeWidth="1.6"
+              fill="none"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              initial={{ pathLength: 0 }}
+              animate={inView ? {
+                ...loopKeyframes,
+                transition: { ...loopKeyframes.transition, delay: 1.2 },
+              } : { pathLength: 0 }}
+            />
           </svg>
           <p className="mt-2 text-xs text-foreground font-medium">Sarah Meier</p>
           <p className="text-[10px] text-muted-foreground">14.04.2026, 14:33 Uhr</p>
         </div>
       </div>
-      <div className="relative mt-6 bg-card rounded-xl border border-border p-4 flex items-center gap-3 shadow-xs">
+      <motion.div
+        initial={{ opacity: 0, y: 14 }}
+        animate={{ opacity: inView ? 1 : 0, y: inView ? 0 : 14 }}
+        transition={{ delay: 2.4, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+        className="relative mt-6 bg-card rounded-xl border border-border p-4 flex items-center gap-3 shadow-xs"
+      >
         <div className="h-9 w-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
           <FileText className="h-4 w-4 text-emerald-700 dark:text-emerald-300" />
         </div>
@@ -501,7 +637,7 @@ function SignatureVisual() {
           <p className="text-[11px] text-muted-foreground">4 Seiten · 1,2 MB · mit Signaturen</p>
         </div>
         <Download className="h-4 w-4 text-muted-foreground" />
-      </div>
+      </motion.div>
     </div>
   )
 }
@@ -537,19 +673,21 @@ function FAQ() {
   return (
     <section className="py-24 sm:py-32 bg-muted/40 border-y border-border">
       <div className="mx-auto max-w-3xl px-4 sm:px-6">
-        <div className="text-center mb-12">
+        <Reveal className="text-center mb-12">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-brass-600 dark:text-brass-400 mb-3">
             Häufige Fragen
           </p>
           <h2 className="font-heading text-4xl sm:text-5xl tracking-tight text-foreground leading-[1.05]">
             Was Sie wissen sollten.
           </h2>
-        </div>
-        <dl className="space-y-3">
+        </Reveal>
+        <RevealStagger className="space-y-3" staggerChildren={0.06}>
           {items.map((item, i) => (
-            <FAQItem key={i} q={item.q} a={item.a} />
+            <RevealItem key={i}>
+              <FAQItem q={item.q} a={item.a} />
+            </RevealItem>
           ))}
-        </dl>
+        </RevealStagger>
       </div>
     </section>
   )
@@ -586,7 +724,7 @@ function FinalCTA() {
   return (
     <section className="py-24 sm:py-32">
       <div className="mx-auto max-w-5xl px-4 sm:px-6">
-        <div className="relative overflow-hidden rounded-3xl bg-ink-800 p-10 sm:p-16 text-center shadow-xl">
+        <Reveal y={32} duration={0.8} className="relative overflow-hidden rounded-3xl bg-ink-800 p-10 sm:p-16 text-center shadow-xl">
           {/* Ledger grid on dark */}
           <div className="absolute inset-0 opacity-[0.08]" style={{ backgroundImage: 'radial-gradient(circle, rgba(250,248,243,1) 1px, transparent 1px)', backgroundSize: '28px 28px' }} />
           {/* Brass glow */}
@@ -617,7 +755,7 @@ function FinalCTA() {
               </Link>
             </div>
           </div>
-        </div>
+        </Reveal>
       </div>
     </section>
   )
