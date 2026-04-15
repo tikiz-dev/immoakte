@@ -63,9 +63,12 @@ export default function ForgotPasswordPage() {
                 <p className="text-sm text-center text-muted-foreground leading-relaxed">
                   Falls ein Konto mit <strong className="text-foreground">{email}</strong> existiert, erhalten Sie in Kürze einen Link zum Zurücksetzen Ihres Passworts.
                 </p>
-                <Button asChild className="w-full mt-2">
-                  <Link href="/login">Zurück zum Login</Link>
-                </Button>
+                <Link
+                  href="/login"
+                  className="w-full mt-2 inline-flex items-center justify-center gap-2 h-10 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium shadow-xs hover:bg-primary/90 transition-colors"
+                >
+                  Zurück zum Login
+                </Link>
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-4">
