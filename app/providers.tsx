@@ -4,7 +4,8 @@ import { AuthProvider } from '@/contexts/AuthContext'
 import { ThemeProvider } from '@/contexts/ThemeContext'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { Toaster } from '@/components/ui/sonner'
-import { CookieConsent } from '@/components/CookieConsent'
+import { CookieBanner } from '@/components/consent/CookieBanner'
+import { GoogleAnalyticsLoader } from '@/components/consent/GoogleAnalyticsLoader'
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -12,7 +13,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <AuthProvider>
         <ErrorBoundary>
           {children}
-          <CookieConsent />
+          <CookieBanner />
+          <GoogleAnalyticsLoader />
           <Toaster position="top-center" />
         </ErrorBoundary>
       </AuthProvider>

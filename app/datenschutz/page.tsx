@@ -1,6 +1,6 @@
 import Header from '@/components/layout/Header'
 import Footer from '@/components/layout/Footer'
-import { ConsentControls } from '@/components/CookieConsent'
+import Link from 'next/link'
 
 export const metadata = {
   title: 'Datenschutzerklärung — ImmoAkte',
@@ -128,12 +128,16 @@ export default function Datenschutz() {
               .
             </p>
 
-            <div className="mt-5">
-              <p className="text-foreground font-medium text-sm mb-2">
-                Deine Wahl jederzeit ändern
-              </p>
-              <ConsentControls />
-            </div>
+            <p className="mt-3">
+              Du kannst deine Wahl jederzeit über die{' '}
+              <Link
+                href="/cookie-einstellungen"
+                className="text-primary hover:underline"
+              >
+                Cookie-Einstellungen
+              </Link>{' '}
+              ändern oder widerrufen.
+            </p>
           </section>
 
           <section>

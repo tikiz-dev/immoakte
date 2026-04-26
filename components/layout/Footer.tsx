@@ -13,6 +13,7 @@ const COLS: { title: string; links: { label: string; href: string; external?: bo
     links: [
       { label: 'Impressum', href: '/impressum' },
       { label: 'Datenschutz', href: '/datenschutz' },
+      { label: 'Cookie-Einstellungen', href: '/cookie-einstellungen' },
     ],
   },
   {
