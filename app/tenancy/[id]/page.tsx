@@ -2,7 +2,12 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { useAuth } from '@/contexts/AuthContext'
+import {
+  getTenancy, listProtocolsForTenancy, listDocuments,
+  upsertProtocol, deleteProtocol as storeDeleteProtocol,
+  deleteDocument as storeDeleteDocument, deleteTenancy as storeDeleteTenancy,
+} from '@/lib/local-store'
+import { createDocumentForType } from '@/lib/document-create'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
@@ -14,7 +19,6 @@ import {
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { format } from 'date-fns'
 import { de } from 'date-fns/locale'
-import { createClient } from '@/lib/supabase/client'
 import { RentalContractDialog } from '@/components/documents/RentalContractDialog'
 
 interface TenancyItem {
@@ -67,8 +71,6 @@ function StageFromItems(items: TenancyItem[]): { label: string; variant: 'draft'
 export default function TenancyPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
-  const { user } = useAuth()
-  const supabase = createClient()
 
   const [tenancy, setTenancy] = useState<any>(null)
   const [items, setItems] = useState<TenancyItem[]>([])
@@ -79,28 +81,24 @@ export default function TenancyPage() {
   const [rentalDialogOpen, setRentalDialogOpen] = useState(false)
 
   useEffect(() => {
-    if (!user) { router.replace('/login'); return }
     loadData()
-  }, [id, user])
+  }, [id])
 
   const loadData = async () => {
-    let json: any
-    try {
-      const res = await fetch(`/api/tenancies/${id}`)
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      json = await res.json()
-    } catch {
-      toast.error('Daten konnten nicht geladen werden')
+    const t = getTenancy(id)
+    if (!t) {
+      toast.error('Nicht gefunden')
       router.push('/dashboard')
       return
     }
-    if (json.error) { toast.error('Nicht gefunden'); router.push('/dashboard'); return }
+    const protocols = listProtocolsForTenancy(id)
+    const documents = listDocuments({ tenancyId: id })
 
-    setTenancy(json.tenancy)
+    setTenancy(t)
 
     const merged: TenancyItem[] = []
 
-    for (const proto of (json.protocols || [])) {
+    for (const proto of protocols) {
       const cfg = ITEM_CONFIG[proto.type]
       if (!cfg) continue
       merged.push({
@@ -115,7 +113,7 @@ export default function TenancyPage() {
       })
     }
 
-    for (const doc of (json.documents || [])) {
+    for (const doc of documents) {
       const cfg = ITEM_CONFIG[doc.type]
       merged.push({
         id: doc.id,
@@ -145,12 +143,9 @@ export default function TenancyPage() {
     try {
       if (cfg.kind === 'protocol') {
         const einzugItem = items.find(i => i.type === 'Einzug')
-
-        let einzugData: any = null
-        if (type === 'Auszug' && einzugItem) {
-          const { data } = await supabase.from('protocols').select('rooms,meters,keys').eq('id', einzugItem.id).single()
-          einzugData = data
-        }
+        const einzugData = type === 'Auszug' && einzugItem
+          ? listProtocolsForTenancy(id).find(p => p.id === einzugItem.id)
+          : null
 
         const rooms = type === 'Auszug'
           ? (einzugData?.rooms?.map((r: any) => ({ ...r, defects: r.defects || [] })) || [])
@@ -166,34 +161,29 @@ export default function TenancyPage() {
             ]
         const keys = type === 'Auszug' ? (einzugData?.keys || []) : []
 
-        const { data: proto, error } = await supabase.from('protocols').insert({
+        const proto = upsertProtocol({
           tenancy_id: id,
           property_id: tenancy.property_id,
-          owner_id: user!.id,
           tenant_salutation: tenancy.tenant_salutation,
           tenant_first_name: tenancy.tenant_first_name,
           tenant_last_name: tenancy.tenant_last_name,
           tenant_email: tenancy.tenant_email,
           tenant_phone: tenancy.tenant_phone,
           date: new Date().toISOString(),
-          type,
+          type: type as 'Einzug' | 'Auszug',
           status: 'draft',
           rooms,
           meters,
           keys,
           linked_protocol_id: type === 'Auszug' ? (einzugItem?.id || null) : null,
-        }).select().single()
-
-        if (error) throw error
+        })
         router.push(`/protocol/${proto.id}`)
       } else {
-        const res = await fetch('/api/documents', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type, tenancy_id: id, property_id: tenancy.property_id }),
+        const document = createDocumentForType({
+          type: type as any,
+          tenancy_id: id,
+          property_id: tenancy.property_id,
         })
-        const { document, error } = await res.json()
-        if (error) throw new Error(error)
         router.push(`/documents/${document.id}`)
       }
     } catch (err: any) {
@@ -206,9 +196,8 @@ export default function TenancyPage() {
   const deleteTenancy = async () => {
     setDeleting(true)
     try {
-      const res = await fetch(`/api/tenancies/${id}`, { method: 'DELETE' })
-      const { error } = await res.json()
-      if (error) throw new Error(error)
+      const ok = storeDeleteTenancy(id)
+      if (!ok) throw new Error('Nicht gefunden')
       toast.success('Mietverhältnis gelöscht')
       router.push('/dashboard')
     } catch (err: any) {
@@ -223,30 +212,23 @@ export default function TenancyPage() {
     else router.push(`/documents/${item.id}`)
   }
 
-  const deleteDocument = async (docId: string) => {
-    const res = await fetch(`/api/documents/${docId}`, { method: 'DELETE' })
-    if (!res.ok) { toast.error('Fehler beim Löschen'); return }
+  const deleteDocumentItem = (docId: string) => {
+    const ok = storeDeleteDocument(docId)
+    if (!ok) { toast.error('Fehler beim Löschen'); return }
     setItems(prev => prev.filter(i => i.id !== docId))
     toast.success('Dokument gelöscht')
   }
 
-  /**
-   * Protokolle (Einzug/Auszug) haben kein REST-Endpoint — sie werden direkt
-   * über Supabase gelöscht (RLS schützt vor fremden Zugriffen). Ohne diesen
-   * Handler fehlte der Trash-Button in der Akten-Timeline, obwohl er laut
-   * Design für alle Entwurfs-Einträge sichtbar sein muss.
-   */
-  const deleteProtocol = async (protocolId: string) => {
-    const supabase = createClient()
-    const { error } = await supabase.from('protocols').delete().eq('id', protocolId)
-    if (error) { toast.error('Fehler beim Löschen'); return }
+  const deleteProtocolItem = (protocolId: string) => {
+    const ok = storeDeleteProtocol(protocolId)
+    if (!ok) { toast.error('Fehler beim Löschen'); return }
     setItems(prev => prev.filter(i => i.id !== protocolId))
     toast.success('Protokoll gelöscht')
   }
 
   const deleteItem = (item: TenancyItem) => {
-    if (item.kind === 'protocol') return deleteProtocol(item.id)
-    return deleteDocument(item.id)
+    if (item.kind === 'protocol') return deleteProtocolItem(item.id)
+    return deleteDocumentItem(item.id)
   }
 
   const stage = useMemo(() => StageFromItems(items), [items])

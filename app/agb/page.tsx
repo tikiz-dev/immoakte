@@ -39,83 +39,28 @@ export default function AGB() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-foreground mb-3">§ 3 Registrierung & Vertragsschluss</h2>
+            <h2 className="text-xl font-semibold text-foreground mb-3">§ 3 Nutzung &amp; Vertragsschluss</h2>
             <p>
-              Die Registrierung ist kostenlos. Mit der Registrierung kommt ein Nutzungsvertrag für den Gratis-Tarif zustande. Für kostenpflichtige Tarife kommt der Vertrag mit Abschluss des Zahlungsvorgangs über Stripe zustande.
-            </p>
-            <p className="mt-2">
-              Der Nutzer ist verpflichtet, bei der Registrierung wahrheitsgemäße Angaben zu machen und diese aktuell zu halten. Die Zugangsdaten sind vertraulich zu behandeln.
+              Die Nutzung von ImmoAkte ist kostenlos und ohne Anmeldung möglich.
+              Mit dem Aufruf der Plattform kommt ein unentgeltlicher Nutzungsvertrag
+              zustande, der jederzeit durch Schließen des Browsers oder Löschen der
+              lokalen Daten beendet werden kann.
             </p>
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-foreground mb-3">§ 4 Tarife & Preise</h2>
-            <p>Es stehen folgende Tarife zur Verfügung:</p>
-            <div className="mt-3 overflow-x-auto">
-              <table className="w-full text-sm border-collapse">
-                <thead>
-                  <tr className="bg-slate-100">
-                    <th className="text-left p-2 border border-slate-200 font-semibold">Tarif</th>
-                    <th className="text-left p-2 border border-slate-200 font-semibold">Preis</th>
-                    <th className="text-left p-2 border border-slate-200 font-semibold">Leistung</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td className="p-2 border border-slate-200">Gratis</td>
-                    <td className="p-2 border border-slate-200">0,00 €</td>
-                    <td className="p-2 border border-slate-200">1 Protokoll (einmalig)</td>
-                  </tr>
-                  <tr>
-                    <td className="p-2 border border-slate-200">Flex</td>
-                    <td className="p-2 border border-slate-200">9,99 € / Protokoll</td>
-                    <td className="p-2 border border-slate-200">1 Protokoll, Einmalzahlung</td>
-                  </tr>
-                  <tr>
-                    <td className="p-2 border border-slate-200">Standard</td>
-                    <td className="p-2 border border-slate-200">19,99 € / Monat</td>
-                    <td className="p-2 border border-slate-200">10 Protokolle pro Monat, monatlich kündbar</td>
-                  </tr>
-                  <tr>
-                    <td className="p-2 border border-slate-200">Pro</td>
-                    <td className="p-2 border border-slate-200">39,99 € / Monat</td>
-                    <td className="p-2 border border-slate-200">50 Protokolle pro Monat, monatlich kündbar</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <p className="mt-3">
-              Alle Preise verstehen sich zuzüglich der gesetzlichen Mehrwertsteuer. Die Abrechnung erfolgt über den Zahlungsdienstleister Stripe.
-            </p>
-          </section>
-
-          <section>
-            <h2 className="text-xl font-semibold text-foreground mb-3">§ 5 Zahlung</h2>
+            <h2 className="text-xl font-semibold text-foreground mb-3">§ 4 Tarife &amp; Preise</h2>
             <p>
-              Zahlungen werden ausschließlich über Stripe Payments Europe, Ltd. abgewickelt. Für Einmalzahlungen (Gratis, Flex) erfolgt die Abrechnung sofort. Für Abonnements (Standard, Pro) wird der Betrag monatlich im Voraus am jeweiligen Vertragsjahrestag abgebucht.
-            </p>
-            <p className="mt-2">
-              Bei Zahlungsverzug ist der Anbieter berechtigt, den Zugang zur Plattform zu sperren, bis der ausstehende Betrag beglichen ist.
-            </p>
-          </section>
-
-          <section>
-            <h2 className="text-xl font-semibold text-foreground mb-3">§ 6 Laufzeit & Kündigung</h2>
-            <p>
-              Abonnements (Standard, Pro) sind monatlich kündbar. Die Kündigung wird zum Ende des laufenden Abrechnungszeitraums wirksam. Eine Kündigung kann über die Kontoeinstellungen oder per E-Mail an <a href="mailto:info@weserbergland-dienstleistungen.de" className="text-primary hover:underline">info@weserbergland-dienstleistungen.de</a> erfolgen.
-            </p>
-            <p className="mt-2">
-              Einmalzahlungen (Flex) begründen kein Dauerschuldverhältnis und können nicht gekündigt werden.
-            </p>
-            <p className="mt-2">
-              Das Recht zur außerordentlichen Kündigung aus wichtigem Grund bleibt unberührt.
+              Die Plattform wird derzeit kostenfrei angeboten. Es findet keine
+              Zahlung statt, es ist kein Zahlungsdienstleister eingebunden und
+              es gibt keine kostenpflichtigen Tarife.
             </p>
           </section>
 
           <section>
             <h2 className="text-xl font-semibold text-foreground mb-3">§ 7 Nutzungsrechte & Pflichten</h2>
             <p>
-              Der Nutzer erhält ein einfaches, nicht übertragbares Recht zur Nutzung der Plattform im Rahmen des gebuchten Tarifs. Die Weitergabe von Zugangsdaten an Dritte ist nicht gestattet.
+              Der Nutzer erhält ein einfaches, nicht übertragbares Recht zur Nutzung der Plattform im Rahmen dieser Vereinbarung.
             </p>
             <p className="mt-2">
               Der Nutzer ist verantwortlich dafür, dass alle über die Plattform verarbeiteten Daten (insbesondere Mieterdaten) DSGVO-konform erhoben wurden und die betroffenen Personen über die Verarbeitung informiert sind. Der Anbieter ist in diesem Verhältnis Auftragsverarbeiter gemäß Art. 28 DSGVO.

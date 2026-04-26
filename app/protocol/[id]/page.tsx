@@ -3,7 +3,10 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
-import { createClient } from '@/lib/supabase/client'
+import {
+  getProtocol, upsertProtocol, deleteProtocol as storeDeleteProtocol,
+  finalizeProtocol, getProfile, getProperty,
+} from '@/lib/local-store'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent } from '@/components/ui/tabs'
@@ -35,7 +38,6 @@ export default function ProtocolView() {
   const { user } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
-  const supabase = createClient()
   const [protocol, setProtocol] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('rooms')
@@ -50,38 +52,10 @@ export default function ProtocolView() {
   const landlordSigRef = useRef<SignaturePadHandle>(null)
   const tenantSigRef = useRef<SignaturePadHandle>(null)
   const [isOnline, setIsOnline] = useState(true)
-  const [resolvedImages, setResolvedImages] = useState<Map<string, string>>(new Map())
 
-  const extractStoragePath = (urlOrPath: string): string | null => {
-    if (!urlOrPath || urlOrPath.startsWith('data:')) return null
-    if (!urlOrPath.startsWith('http')) return urlOrPath
-    const marker = '/object/public/protocol-images/'
-    const idx = urlOrPath.indexOf(marker)
-    if (idx !== -1) return decodeURIComponent(urlOrPath.slice(idx + marker.length).split('?')[0])
-    return null
-  }
-
-  const resolveImageUrl = (urlOrPath: string): string => {
-    if (!urlOrPath || urlOrPath.startsWith('data:')) return urlOrPath
-    const path = extractStoragePath(urlOrPath)
-    if (!path) return urlOrPath
-    return resolvedImages.get(path) || urlOrPath
-  }
-
-  const loadResolvedImages = async (proto: any) => {
-    const paths = new Set<string>()
-    proto.rooms?.forEach((r: any) =>
-      r.defects?.forEach((d: any) =>
-        d.photoUrls?.forEach((u: string) => { const p = extractStoragePath(u); if (p) paths.add(p) })
-      )
-    )
-    proto.meters?.forEach((m: any) => { const p = extractStoragePath(m.photoUrl); if (p) paths.add(p) })
-    if (paths.size === 0) return
-    const { data } = await supabase.storage.from('protocol-images').createSignedUrls([...paths], 86400)
-    const map = new Map<string, string>(resolvedImages)
-    data?.forEach(({ path, signedUrl }: any) => { if (signedUrl) map.set(path, signedUrl) })
-    setResolvedImages(map)
-  }
+  // Im Slim-Modus liegen alle Bilder als Data-URLs direkt im Protokoll —
+  // keine Signed-URL-Auflösung nötig.
+  const resolveImageUrl = (urlOrPath: string): string => urlOrPath || ''
 
   useEffect(() => {
     const onOnline  = () => setIsOnline(true)
@@ -95,40 +69,22 @@ export default function ProtocolView() {
   useEffect(() => {
     if (!id || !user) return
 
-    const fetchData = async () => {
+    const fetchData = () => {
       try {
-        const { data: profile } = await supabase
-          .from('users')
-          .select('name, company')
-          .eq('id', user.id)
-          .single()
-        if (profile) {
-          setUserName(profile.name || '')
-          setUserCompany(profile.company || '')
-        }
+        const profile = getProfile()
+        setUserName(profile.name || '')
+        setUserCompany(profile.company || '')
 
-        const { data: proto, error } = await supabase
-          .from('protocols')
-          .select('*')
-          .eq('id', id)
-          .eq('owner_id', user.id)
-          .single()
-
-        if (error || !proto) {
-          toast.error('Protokoll nicht gefunden oder keine Berechtigung')
+        const proto = getProtocol(id)
+        if (!proto) {
+          toast.error('Protokoll nicht gefunden')
           router.push('/dashboard')
           return
         }
-
         setProtocol(proto)
-        loadResolvedImages(proto)
 
         if (proto.property_id) {
-          const { data: prop } = await supabase
-            .from('properties')
-            .select('address')
-            .eq('id', proto.property_id)
-            .single()
+          const prop = getProperty(proto.property_id)
           if (prop) setPropertyAddress(prop.address || '')
         }
       } catch {
@@ -152,11 +108,7 @@ export default function ProtocolView() {
   const saveProtocol = async (updatedData: any) => {
     if (!id) return
     try {
-      const { error } = await supabase
-        .from('protocols')
-        .update({ ...updatedData, updated_at: new Date().toISOString() })
-        .eq('id', id)
-      if (error) throw error
+      upsertProtocol({ id, ...updatedData, type: protocol?.type ?? 'Einzug' })
       setProtocol((prev: any) => ({ ...prev, ...updatedData }))
     } catch {
       toast.error('Fehler beim Speichern')
@@ -186,26 +138,9 @@ export default function ProtocolView() {
           const ctx = canvas.getContext('2d')
           if (!ctx) { reject(new Error('Canvas context not available')); return }
           ctx.drawImage(img, 0, 0, width, height)
-
-          canvas.toBlob(async (blob) => {
-            if (!blob) { reject(new Error('Fehler beim Verarbeiten des Bildes')); return }
-            try {
-              const path = `${user!.id}/${id}/${crypto.randomUUID()}.jpg`
-              const { data, error } = await supabase.storage
-                .from('protocol-images')
-                .upload(path, blob, { contentType: 'image/jpeg', upsert: false })
-              if (error) throw error
-              const { data: signed } = await supabase.storage
-                .from('protocol-images')
-                .createSignedUrl(data.path, 86400)
-              if (signed?.signedUrl) {
-                setResolvedImages(prev => new Map(prev).set(data.path, signed.signedUrl))
-              }
-              resolve(data.path)
-            } catch (err) {
-              reject(err)
-            }
-          }, 'image/jpeg', 0.75)
+          // Slim-Modus: Bild wird als Data-URL inline im Protokoll gespeichert.
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.75)
+          resolve(dataUrl)
         }
         img.onerror = () => reject(new Error('Fehler beim Laden des Bildes'))
         img.src = e.target?.result as string
@@ -215,18 +150,14 @@ export default function ProtocolView() {
     })
   }
 
-  const deleteStoragePhoto = async (urlOrPath: string) => {
-    if (!urlOrPath || urlOrPath.startsWith('data:')) return
-    try {
-      const path = extractStoragePath(urlOrPath) || urlOrPath
-      await supabase.storage.from('protocol-images').remove([path])
-      setResolvedImages(prev => { const m = new Map(prev); m.delete(path); return m })
-    } catch { /* non-critical */ }
+  const deleteStoragePhoto = async (_urlOrPath: string) => {
+    // No remote storage in slim mode — caller already removed the data-URL
+    // from the rooms/meters array; nothing else to do.
   }
 
-  const executeDelete = async () => {
-    const { error } = await supabase.from('protocols').delete().eq('id', id)
-    if (error) { toast.error('Fehler beim Löschen'); return }
+  const executeDelete = () => {
+    const ok = storeDeleteProtocol(id)
+    if (!ok) { toast.error('Fehler beim Löschen'); return }
     toast.success('Protokoll gelöscht')
     router.push('/dashboard')
   }
@@ -275,35 +206,15 @@ export default function ProtocolView() {
 
     setIsCheckoutLoading(true)
     try {
-      const res = await fetch('/api/finalize', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ protocolId: id }),
-      })
-
-      if (res.ok) {
-        setProtocol((prev: any) => ({ ...prev, finalized_at: new Date().toISOString(), status: 'final' }))
-        await generatePDF(true, protocolWithSigs)
-        if (protocol.tenant_email) setIsEmailDialogOpen(true)
-        else router.push('/dashboard')
-      } else {
-        const data = await res.json()
-        if (data.error === 'payment_required') {
-          const checkoutRes = await fetch('/api/stripe/checkout', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_ONDEMAND,
-              mode: 'payment',
-              protocolId: id,
-            }),
-          })
-          const { url } = await checkoutRes.json()
-          if (url) window.location.href = url
-        } else {
-          toast.error('Fehler beim Abschließen')
-        }
+      const ok = finalizeProtocol(id)
+      if (!ok) {
+        toast.error('Fehler beim Abschließen')
+        return
       }
+      setProtocol((prev: any) => ({ ...prev, finalized_at: new Date().toISOString(), status: 'final' }))
+      await generatePDF(false, protocolWithSigs)
+      if (protocol.tenant_email) setIsEmailDialogOpen(true)
+      else router.push('/dashboard')
     } catch {
       toast.error('Fehler beim Abschließen')
     } finally {
@@ -312,25 +223,9 @@ export default function ProtocolView() {
   }
 
   const urlToBase64 = async (urlOrPath: string): Promise<string> => {
+    // Slim-Modus: Alle Bilder liegen bereits als Data-URLs vor.
     if (!urlOrPath) return ''
-    if (urlOrPath.startsWith('data:')) return urlOrPath
-    try {
-      let url = urlOrPath
-      if (!urlOrPath.startsWith('http')) {
-        const { data } = await supabase.storage.from('protocol-images').createSignedUrl(urlOrPath, 300)
-        if (!data?.signedUrl) return ''
-        url = data.signedUrl
-      }
-      const res = await fetch(url)
-      if (!res.ok) return ''
-      const blob = await res.blob()
-      return await new Promise<string>((resolve) => {
-        const reader = new FileReader()
-        reader.onloadend = () => resolve(reader.result as string)
-        reader.onerror = () => resolve('')
-        reader.readAsDataURL(blob)
-      })
-    } catch { return '' }
+    return urlOrPath
   }
 
   const prepareProtocolImages = async (p: any) => {
@@ -373,8 +268,8 @@ export default function ProtocolView() {
     } catch { return false }
   }
 
-  const generatePDF = async (uploadAndStore = false, protocolOverride?: any) => {
-    if (protocol?.pdf_url && !uploadAndStore) {
+  const generatePDF = async (_uploadAndStore = false, protocolOverride?: any) => {
+    if (protocol?.pdf_url) {
       const ok = await downloadStoredPDF()
       if (ok) return
     }
@@ -430,22 +325,6 @@ export default function ProtocolView() {
       }
 
       const pdfBlob: Blob = await html2pdf().set(opt).from(element as HTMLElement).outputPdf('blob')
-
-      if (uploadAndStore) {
-        try {
-          toast.loading('Speichere PDF...', { id: 'pdf-gen' })
-          const formData = new FormData()
-          formData.append('pdf', pdfBlob, filename)
-          formData.append('protocolId', id)
-          const res = await fetch('/api/protocol/save-pdf', { method: 'POST', body: formData })
-          const data = await res.json()
-          if (data.url) {
-            setProtocol((prev: any) => ({ ...prev, pdf_url: data.url }))
-          }
-        } catch (e) {
-          console.warn('PDF upload failed, falling back to local download', e)
-        }
-      }
 
       const pdfUrl = URL.createObjectURL(pdfBlob)
       const link = document.createElement('a')

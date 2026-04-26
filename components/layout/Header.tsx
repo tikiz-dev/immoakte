@@ -2,7 +2,6 @@
 
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
-import { useAuth } from '@/contexts/AuthContext'
 import { usePathname } from 'next/navigation'
 import { Logo } from '@/components/brand/Logo'
 import { ThemeToggle } from '@/components/ThemeToggle'
@@ -10,7 +9,6 @@ import { useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
 
 export default function Header() {
-  const { user } = useAuth()
   const pathname = usePathname()
   const onPricing = pathname === '/pricing'
   const [scrolled, setScrolled] = useState(false)
@@ -48,20 +46,9 @@ export default function Header() {
             Preise
           </Link>
           <ThemeToggle compact className="hidden sm:inline-flex" />
-          {user ? (
-            <Link href="/dashboard" className="ml-1">
-              <Button size="sm">Dashboard</Button>
-            </Link>
-          ) : (
-            <>
-              <Link href="/login">
-                <Button variant="ghost" size="sm">Anmelden</Button>
-              </Link>
-              <Link href="/login?mode=signup">
-                <Button size="sm">Registrieren</Button>
-              </Link>
-            </>
-          )}
+          <Link href="/dashboard" className="ml-1">
+            <Button size="sm">Dashboard</Button>
+          </Link>
         </div>
       </div>
     </header>

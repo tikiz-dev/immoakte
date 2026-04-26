@@ -13,20 +13,21 @@ import {
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { de } from 'date-fns/locale'
-import { createClient } from '@/lib/supabase/client'
+import { listDocuments, deleteDocument, upsertProtocol } from '@/lib/local-store'
+import { createDocumentForType } from '@/lib/document-create'
 import { cn } from '@/lib/utils'
 import { RentalContractDialog } from '@/components/documents/RentalContractDialog'
 
 interface Protocol {
   id: string
-  tenant_first_name?: string
-  tenant_last_name?: string
-  tenant_salutation?: string
-  tenant_email?: string
-  date: string | null
+  tenant_first_name?: string | null
+  tenant_last_name?: string | null
+  tenant_salutation?: string | null
+  tenant_email?: string | null
+  date?: string | null
   type: string
   status: string
-  property_id: string
+  property_id?: string | null
   propertyAddress?: string
   linked_protocol_id?: string | null
   finalized_at?: string | null
@@ -69,7 +70,7 @@ const DOC_TYPE_ORDER: Record<string, number> = {
   mietvertrag: 1, wohnungsgeberbestaetigung: 2, kautionsbescheinigung: 3, sonstiges: 4,
 }
 
-const safeFormatDate = (dateStr: string | null) => {
+const safeFormatDate = (dateStr: string | null | undefined) => {
   if (!dateStr) return 'Kein Datum'
   try { return format(new Date(dateStr), 'dd. MMMM yyyy', { locale: de }) }
   catch { return '' }
@@ -90,7 +91,6 @@ interface TenancyCardProps {
 
 export function TenancyCard({ group, userId, onDelete, onDuplicate, onAuszugCreated, onOpenTenancy }: TenancyCardProps) {
   const router = useRouter()
-  const supabase = createClient()
   const [showDocMenu, setShowDocMenu] = useState(false)
   const [documents, setDocuments] = useState<Document[]>([])
   const [docsLoaded, setDocsLoaded] = useState(false)
@@ -114,23 +114,21 @@ export function TenancyCard({ group, userId, onDelete, onDuplicate, onAuszugCrea
     if (docsLoaded) return
     const tenancyId = group.tenancyId || group.einzug?.id
     if (!tenancyId) return
-    const res = await fetch(`/api/documents?tenancy_id=${tenancyId}`)
-    const { documents } = await res.json()
-    setDocuments(documents || [])
+    setDocuments(listDocuments({ tenancyId }) as Document[])
     setDocsLoaded(true)
   }
 
   const confirmDeleteDocument = async () => {
     if (!docToDelete) return
     const docId = docToDelete.id
-    const res = await fetch(`/api/documents/${docId}`, { method: 'DELETE' })
-    if (!res.ok) { toast.error('Fehler beim Löschen'); return }
+    const ok = deleteDocument(docId)
+    if (!ok) { toast.error('Fehler beim Löschen'); return }
     setDocuments(prev => prev.filter(d => d.id !== docId))
     setDocToDelete(null)
     toast.success('Dokument gelöscht')
   }
 
-  const createDocument = async (type: string) => {
+  const createDoc = async (type: string) => {
     setShowDocMenu(false)
     // Mietvertrag opens a pre-fill dialog first
     if (type === 'mietvertrag') {
@@ -143,27 +141,25 @@ export function TenancyCard({ group, userId, onDelete, onDuplicate, onAuszugCrea
       return
     }
     setCreatingDoc(true)
-    const res = await fetch('/api/documents', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        type,
+    try {
+      const document = createDocumentForType({
+        type: type as any,
         tenancy_id: group.tenancyId || group.einzug?.id || null,
         property_id: group.propertyId || group.einzug?.property_id || null,
-      }),
-    })
-    const { document, error } = await res.json()
-    setCreatingDoc(false)
-    if (error) { toast.error('Fehler beim Erstellen'); return }
-    router.push(`/documents/${document.id}`)
+      })
+      router.push(`/documents/${document.id}`)
+    } catch {
+      toast.error('Fehler beim Erstellen')
+    } finally {
+      setCreatingDoc(false)
+    }
   }
 
   const createEinzug = async () => {
     toast.loading('Erstelle Einzugsprotokoll...', { id: 'create-einzug' })
-    const { data, error } = await supabase.from('protocols').insert({
+    const data = upsertProtocol({
       tenancy_id: group.tenancyId,
       property_id: group.propertyId || null,
-      owner_id: userId,
       tenant_salutation: group.tenantSalutation || '',
       tenant_first_name: group.tenantFirstName || '',
       tenant_last_name: group.tenantLastName || '',
@@ -178,8 +174,7 @@ export function TenancyCard({ group, userId, onDelete, onDuplicate, onAuszugCrea
         { id: crypto.randomUUID(), type: 'Wasser', number: '', reading: '', photoUrl: '' },
       ],
       keys: [],
-    }).select().single()
-    if (error) { toast.error('Fehler', { id: 'create-einzug' }); return }
+    })
     toast.success('Einzugsprotokoll erstellt', { id: 'create-einzug' })
     router.push(`/protocol/${data.id}`)
   }
@@ -190,10 +185,9 @@ export function TenancyCard({ group, userId, onDelete, onDuplicate, onAuszugCrea
     const einzug = group.einzug
     const newRooms = einzug.rooms?.map(r => ({ ...r, defects: r.defects || [] })) || []
     const newMeters = einzug.meters?.map(m => ({ ...m, reading: '', photoUrl: '' })) || []
-    const { data, error } = await supabase.from('protocols').insert({
+    const data = upsertProtocol({
       tenancy_id: group.tenancyId || einzug.id,
       property_id: einzug.property_id,
-      owner_id: userId,
       tenant_salutation: einzug.tenant_salutation || '',
       tenant_first_name: einzug.tenant_first_name || '',
       tenant_last_name: einzug.tenant_last_name || '',
@@ -204,10 +198,9 @@ export function TenancyCard({ group, userId, onDelete, onDuplicate, onAuszugCrea
       rooms: newRooms,
       meters: newMeters,
       keys: einzug.keys || [],
-    }).select().single()
-    if (error) { toast.error('Fehler', { id: 'create-auszug' }); return }
+    })
     toast.success('Auszugsprotokoll erstellt', { id: 'create-auszug' })
-    onAuszugCreated({ ...data, propertyAddress: group.propertyAddress })
+    onAuszugCreated({ ...data, propertyAddress: group.propertyAddress } as Protocol)
     router.push(`/protocol/${data.id}`)
   }
 
@@ -355,7 +348,7 @@ export function TenancyCard({ group, userId, onDelete, onDuplicate, onAuszugCrea
                 icon={icon}
                 title={label}
                 hint={hint}
-                onClick={(e) => { e.stopPropagation(); createDocument(type) }}
+                onClick={(e) => { e.stopPropagation(); createDoc(type) }}
               />
             ))}
           </div>

@@ -1,7 +1,6 @@
 'use client'
 
 import React, { Component, ErrorInfo, ReactNode } from 'react'
-import { useFeedback } from '@/contexts/FeedbackContext'
 import { Button } from '@/components/ui/button'
 import { AlertTriangle, RefreshCcw } from 'lucide-react'
 
@@ -39,14 +38,7 @@ class ErrorBoundaryInner extends Component<Props, State> {
   }
 }
 
-function ErrorFallback({ error, errorInfo }: { error: Error | null, errorInfo: ErrorInfo | null }) {
-  const { openFeedback } = useFeedback()
-
-  const handleReport = () => {
-    const details = `Error: ${error?.message}\n\nStack: ${error?.stack}\n\nComponent Stack: ${errorInfo?.componentStack}`
-    openFeedback(details)
-  }
-
+function ErrorFallback({ error }: { error: Error | null, errorInfo: ErrorInfo | null }) {
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
       <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8 text-center border border-red-100">
@@ -55,15 +47,18 @@ function ErrorFallback({ error, errorInfo }: { error: Error | null, errorInfo: E
         </div>
         <h2 className="text-2xl font-bold text-slate-800 mb-2">Ein unerwarteter Fehler ist aufgetreten</h2>
         <p className="text-slate-600 mb-8">
-          Entschuldigung, da ist etwas schiefgelaufen. Wir arbeiten bereits daran.
+          Entschuldigung, da ist etwas schiefgelaufen. Lade die Seite neu —
+          deine Daten bleiben im Browser-Cache erhalten.
         </p>
+        {error?.message && (
+          <p className="text-xs text-slate-500 mb-6 font-mono break-words">
+            {error.message}
+          </p>
+        )}
         <div className="flex flex-col gap-3">
           <Button onClick={() => window.location.reload()} className="w-full" size="lg">
             <RefreshCcw className="mr-2 h-4 w-4" />
             Seite neu laden
-          </Button>
-          <Button variant="outline" onClick={handleReport} className="w-full" size="lg">
-            Fehlerbericht senden
           </Button>
         </div>
       </div>

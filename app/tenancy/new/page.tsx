@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAuth } from '@/contexts/AuthContext'
+import { createTenancy } from '@/lib/local-store'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -12,14 +12,9 @@ import { toast } from 'sonner'
 import { ArrowLeft, ArrowRight, Loader2, User, Home, Check } from 'lucide-react'
 
 export default function NewTenancy() {
-  const { user, loading: authLoading } = useAuth()
   const router = useRouter()
   const [step, setStep] = useState(1)
   const [loading, setLoading] = useState(false)
-
-  useEffect(() => {
-    if (!authLoading && !user) router.replace('/login')
-  }, [user, authLoading])
 
   const [form, setForm] = useState({
     tenant_salutation: 'Herr',
@@ -45,13 +40,7 @@ export default function NewTenancy() {
 
     setLoading(true)
     try {
-      const res = await fetch('/api/tenancies', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      })
-      const { tenancy, error } = await res.json()
-      if (error) throw new Error(error)
+      const { tenancy } = createTenancy(form)
       toast.success('Mietverhältnis angelegt')
       router.push(`/tenancy/${tenancy.id}`)
     } catch (err: any) {
@@ -60,8 +49,6 @@ export default function NewTenancy() {
       setLoading(false)
     }
   }
-
-  if (!user) return null
 
   const steps = [
     { label: 'Mieter', icon: User },

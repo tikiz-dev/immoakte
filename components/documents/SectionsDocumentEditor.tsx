@@ -25,6 +25,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { type SectionsContent, type ContractSection, stripSectionNumber } from '@/lib/document-templates'
+import { listTemplates, createTemplate } from '@/lib/local-store'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 
@@ -66,12 +67,7 @@ export function SectionsDocumentEditor({ parsed, isFinalized, onChange }: Props)
 
   useEffect(() => {
     if (isFinalized) return
-    const ctrl = new AbortController()
-    fetch(`/api/templates?type=${SECTION_TEMPLATE_TYPE}`, { signal: ctrl.signal })
-      .then(r => r.ok ? r.json() : { templates: [] })
-      .then(({ templates }) => setSectionTemplates(templates || []))
-      .catch(err => { if (err?.name !== 'AbortError') { /* silent */ } })
-    return () => ctrl.abort()
+    setSectionTemplates(listTemplates({ type: SECTION_TEMPLATE_TYPE }) as SectionTemplate[])
   }, [isFinalized])
 
   const sensors = useSensors(
@@ -136,14 +132,8 @@ export function SectionsDocumentEditor({ parsed, isFinalized, onChange }: Props)
     setSavingTpl(true)
     try {
       const payload = JSON.stringify({ title: stripSectionNumber(savingFrom.title), content: savingFrom.content })
-      const res = await fetch('/api/templates', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: tplName.trim(), type: SECTION_TEMPLATE_TYPE, content: payload }),
-      })
-      const { template, error } = await res.json()
-      if (!res.ok) throw new Error(error || 'Fehler')
-      setSectionTemplates(list => [template, ...list])
+      const template = createTemplate({ name: tplName.trim(), type: SECTION_TEMPLATE_TYPE, content: payload })
+      setSectionTemplates(list => [template as SectionTemplate, ...list])
       toast.success('Als Vorlage gespeichert')
       setSavingFrom(null)
       setTplName('')

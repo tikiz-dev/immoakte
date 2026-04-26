@@ -17,21 +17,19 @@ export default function Auftragsverarbeitung() {
 
           <section className="rounded-lg border border-brass-300/60 bg-brass-50/50 dark:bg-brass-900/20 p-5">
             <h2 className="text-lg font-semibold text-foreground mb-2">
-              Wichtig für Sie als Nutzer
+              Hinweis zur aktuellen Slim-Version
             </h2>
             <p>
-              Wenn Sie ImmoAkte für die Verarbeitung von Mieterdaten,
-              Objektdaten oder anderer personenbezogener Daten Dritter nutzen,
-              sind <strong className="text-foreground">Sie</strong> der
-              datenschutzrechtlich Verantwortliche im Sinne der DSGVO. ImmoAkte
-              (Weserbergland Dienstleistungen) handelt dabei ausschließlich als
-              Auftragsverarbeiter.
+              In der aktuellen Open-Beta speichert ImmoAkte sämtliche Inhaltsdaten
+              ausschließlich im <strong>localStorage Ihres Browsers</strong>. Es
+              findet <strong>keine Übertragung personenbezogener Daten an
+              ImmoAkte oder Dritte</strong> statt. Eine Auftragsverarbeitung im
+              Sinne des Art. 28 DSGVO liegt damit nicht vor.
             </p>
             <p className="mt-3">
-              Mit Annahme unserer AGB schließen Sie zugleich diese Vereinbarung
-              zur Auftragsverarbeitung ab. Sie erfüllt die Anforderungen des
-              Art. 28 DSGVO und ersetzt die Notwendigkeit, einen separaten
-              Vertrag zu unterzeichnen.
+              Die folgenden Regelungen gelten vorsorglich für den Fall, dass
+              ImmoAkte zukünftig wieder serverseitig betrieben wird oder
+              einzelne Funktionen Daten an Auftragsverarbeiter übermitteln.
             </p>
           </section>
 
@@ -141,9 +139,9 @@ export default function Auftragsverarbeitung() {
             <ul className="list-disc pl-5 mt-3 space-y-1.5">
               <li>
                 <strong className="text-foreground">Zutrittskontrolle:</strong>{' '}
-                Server betrieben durch zertifizierte Dienstleister (Supabase,
-                Vercel) in EU-Rechenzentren (Frankfurt am Main). Keine
-                physischen Datenträger bei ImmoAkte.
+                Auslieferung der statischen Anwendung über zertifizierte
+                Dienstleister (Vercel) in EU-Rechenzentren (Frankfurt am Main).
+                Keine physischen Datenträger bei ImmoAkte.
               </li>
               <li>
                 <strong className="text-foreground">Zugangskontrolle:</strong>{' '}
@@ -169,8 +167,8 @@ export default function Auftragsverarbeitung() {
               </li>
               <li>
                 <strong className="text-foreground">Verfügbarkeitskontrolle:</strong>{' '}
-                Tägliche Backups durch Supabase, georedundante Speicherung
-                innerhalb der EU.
+                Inhaltsdaten verbleiben im Browser. Sicherung obliegt dem
+                Nutzer (Datenexport als JSON in den Stammdaten verfügbar).
               </li>
               <li>
                 <strong className="text-foreground">Trennungskontrolle:</strong>{' '}
@@ -203,24 +201,9 @@ export default function Auftragsverarbeitung() {
                 </thead>
                 <tbody className="divide-y divide-border">
                   <tr>
-                    <td className="py-2 pr-4 text-foreground/90">Supabase Inc.</td>
-                    <td className="py-2 pr-4">Datenbank &amp; Authentifizierung</td>
-                    <td className="py-2 pr-4">USA / EU-Server Frankfurt</td>
-                  </tr>
-                  <tr>
                     <td className="py-2 pr-4 text-foreground/90">Vercel Inc.</td>
-                    <td className="py-2 pr-4">Hosting / Serverless Functions</td>
+                    <td className="py-2 pr-4">Hosting der statischen Anwendung</td>
                     <td className="py-2 pr-4">USA / EU-Server Frankfurt (fra1)</td>
-                  </tr>
-                  <tr>
-                    <td className="py-2 pr-4 text-foreground/90">Stripe Payments Europe Ltd.</td>
-                    <td className="py-2 pr-4">Zahlungsabwicklung (Verantwortlicher)</td>
-                    <td className="py-2 pr-4">Dublin, Irland</td>
-                  </tr>
-                  <tr>
-                    <td className="py-2 pr-4 text-foreground/90">Google Ireland Ltd.</td>
-                    <td className="py-2 pr-4">Optionale Google-OAuth-Anmeldung</td>
-                    <td className="py-2 pr-4">Dublin, Irland</td>
                   </tr>
                 </tbody>
               </table>

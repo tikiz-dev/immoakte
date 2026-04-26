@@ -1,20 +1,42 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Immo Akte — Slim
 
-# Run and deploy your AI Studio app
+Kostenlose Vermieter-App für Übergabeprotokolle, Mietverträge und
+Wohnungsgeberbestätigungen. Läuft komplett im Browser, alle Daten
+bleiben lokal im `localStorage` — kein Login, keine Cloud, kein Tracking.
 
-This contains everything you need to run your app locally.
+## Features
 
-View your app in AI Studio: https://ai.studio/apps/ecac77fc-564a-457d-8e7c-8dc28aa99ea4
+- Mietverhältnisse anlegen + verwalten
+- Einzugs- & Auszugsprotokolle mit Fotos, Zählerständen, Schlüsselübergabe
+- Mietvertrag, Kautionsbescheinigung, Wohnungsgeberbestätigung mit
+  automatischen Platzhaltern aus Stammdaten
+- Digitale Unterschriften beider Parteien
+- PDF-Export aller Dokumente
+- JSON-Daten-Export aus dem Dashboard
 
-## Run Locally
+## Lokal starten
 
-**Prerequisites:**  Node.js
+```bash
+npm install
+npm run dev
+```
 
+Keine `.env`-Konfiguration nötig — die App braucht keine Backend-Services.
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## Deploy
+
+Lässt sich auf Vercel als statische Next.js-App deployen, ohne
+Environment-Variablen oder Datenbank.
+
+## Architektur
+
+- **Datenhaltung:** `lib/local-store.ts` — schreibt nach `localStorage`
+- **Auth:** synthetischer Lokal-User pro Browser, kein Login
+- **Bilder:** als base64 Data-URLs inline in den Protokollen gespeichert
+  (Browser-localStorage-Limit ~5–10 MB; bei sehr foto-reichen Protokollen
+  irgendwann ein Thema)
+
+## Voll-Version mit Supabase + Stripe
+
+Liegt als eingefrorenes Archiv in einem Schwester-Repo. Siehe
+[`ARCHIVE.md`](./ARCHIVE.md) für die Restart-Anleitung — speziell §12.8.

@@ -1,5 +1,0 @@
-{
-  "name": "ImmoAkte",
-  "description": "Mietverhältnisse, Übergabeprotokolle und rechtliche Dokumente — alles in einer App.",
-  "requestFramePermissions": ["camera", "geolocation"]
-}

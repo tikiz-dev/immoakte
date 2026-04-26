@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAuth } from '@/contexts/AuthContext'
+import { listTemplates, deleteTemplate } from '@/lib/local-store'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { ArrowLeft, Bookmark, FileSignature, Home, Key, FileText, Trash2, Clock, Plus, Pencil } from 'lucide-react'
@@ -29,29 +29,19 @@ const TYPE_META: Record<string, { label: string; icon: React.ElementType; color:
 
 export default function TemplatesPage() {
   const router = useRouter()
-  const { user } = useAuth()
   const [templates, setTemplates] = useState<Template[]>([])
   const [loading, setLoading] = useState(true)
   const [toDelete, setToDelete] = useState<Template | null>(null)
 
   useEffect(() => {
-    if (!user) { router.replace('/login'); return }
-    fetch('/api/templates')
-      .then(r => r.json())
-      .then(({ templates }) => {
-        setTemplates(templates || [])
-        setLoading(false)
-      })
-      .catch(() => {
-        toast.error('Fehler beim Laden der Vorlagen')
-        setLoading(false)
-      })
-  }, [user])
+    setTemplates(listTemplates() as Template[])
+    setLoading(false)
+  }, [])
 
-  const confirmDelete = async () => {
+  const confirmDelete = () => {
     if (!toDelete) return
-    const res = await fetch(`/api/templates/${toDelete.id}`, { method: 'DELETE' })
-    if (!res.ok) { toast.error('Fehler beim Löschen'); return }
+    const ok = deleteTemplate(toDelete.id)
+    if (!ok) { toast.error('Fehler beim Löschen'); return }
     setTemplates(prev => prev.filter(t => t.id !== toDelete.id))
     setToDelete(null)
     toast.success('Vorlage gelöscht')

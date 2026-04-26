@@ -9,7 +9,8 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Home, Calendar, Euro, Shield, FileSignature, Sparkles, Bookmark } from 'lucide-react'
 import { toast } from 'sonner'
-import { createClient } from '@/lib/supabase/client'
+import { listTemplates, getTenancy } from '@/lib/local-store'
+import { createDocumentForType } from '@/lib/document-create'
 import { cn } from '@/lib/utils'
 
 interface RentalContractDialogProps {
@@ -62,7 +63,6 @@ const fmtEuro = (n: number | null) => {
 
 export function RentalContractDialog({ open, onOpenChange, tenancyId, propertyId }: RentalContractDialogProps) {
   const router = useRouter()
-  const supabase = createClient()
   const [terms, setTerms] = useState<RentalTerms>(emptyTerms)
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -74,48 +74,29 @@ export function RentalContractDialog({ open, onOpenChange, tenancyId, propertyId
   // Load user's mietvertrag templates
   useEffect(() => {
     if (!open) return
-    let cancelled = false
-    ;(async () => {
-      try {
-        const res = await fetch('/api/templates?type=mietvertrag')
-        const { templates: list } = await res.json()
-        if (!cancelled) setTemplates(list || [])
-      } catch {
-        // ignore
-      }
-    })()
-    return () => { cancelled = true }
+    setTemplates(listTemplates({ type: 'mietvertrag' }).map(t => ({ id: t.id, name: t.name })))
   }, [open])
 
   // Load existing tenancy data when dialog opens
   useEffect(() => {
     if (!open || !tenancyId) return
-    let cancelled = false
     setLoading(true)
-    ;(async () => {
-      const { data } = await supabase
-        .from('tenancies')
-        .select('sqm, rooms, floor, start_date, contract_duration, contract_end_date, rent_cold, utilities, deposit, notice_period_months, rent_due_day')
-        .eq('id', tenancyId)
-        .single()
-      if (cancelled) return
-      setTerms({
-        sqm: data?.sqm != null ? String(data.sqm).replace('.', ',') : '',
-        rooms: data?.rooms != null ? String(data.rooms).replace('.', ',') : '',
-        floor: data?.floor || '',
-        start_date: data?.start_date || '',
-        contract_duration: (data?.contract_duration as 'unbefristet' | 'befristet') || 'unbefristet',
-        contract_end_date: data?.contract_end_date || '',
-        rent_cold: data?.rent_cold != null ? String(data.rent_cold).replace('.', ',') : '',
-        utilities: data?.utilities != null ? String(data.utilities).replace('.', ',') : '',
-        deposit: data?.deposit != null ? String(data.deposit).replace('.', ',') : '',
-        notice_period_months: data?.notice_period_months != null ? String(data.notice_period_months) : '3',
-        rent_due_day: data?.rent_due_day != null ? String(data.rent_due_day) : '3',
-      })
-      setDepositTouched(!!data?.deposit)
-      setLoading(false)
-    })()
-    return () => { cancelled = true }
+    const data = getTenancy(tenancyId)
+    setTerms({
+      sqm: data?.sqm != null ? String(data.sqm).replace('.', ',') : '',
+      rooms: data?.rooms != null ? String(data.rooms).replace('.', ',') : '',
+      floor: data?.floor || '',
+      start_date: data?.start_date || '',
+      contract_duration: (data?.contract_duration as 'unbefristet' | 'befristet') || 'unbefristet',
+      contract_end_date: data?.contract_end_date || '',
+      rent_cold: data?.rent_cold != null ? String(data.rent_cold).replace('.', ',') : '',
+      utilities: data?.utilities != null ? String(data.utilities).replace('.', ',') : '',
+      deposit: data?.deposit != null ? String(data.deposit).replace('.', ',') : '',
+      notice_period_months: data?.notice_period_months != null ? String(data.notice_period_months) : '3',
+      rent_due_day: data?.rent_due_day != null ? String(data.rent_due_day) : '3',
+    })
+    setDepositTouched(!!data?.deposit)
+    setLoading(false)
   }, [open, tenancyId])
 
   // Derived values
@@ -152,23 +133,13 @@ export function RentalContractDialog({ open, onOpenChange, tenancyId, propertyId
         rent_due_day: parseInt(terms.rent_due_day) || 3,
       }
 
-      const res = await fetch('/api/documents', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'mietvertrag',
-          tenancy_id: tenancyId,
-          property_id: propertyId || null,
-          rental_terms,
-          ...(selectedTemplateId !== 'default' && { template_id: selectedTemplateId }),
-        }),
+      const document = createDocumentForType({
+        type: 'mietvertrag',
+        tenancy_id: tenancyId,
+        property_id: propertyId || null,
+        rental_terms,
+        ...(selectedTemplateId !== 'default' && { template_id: selectedTemplateId }),
       })
-      const { document, error } = await res.json()
-      if (error || !document) {
-        toast.error('Fehler beim Erstellen: ' + (error || 'Unbekannt'))
-        setSubmitting(false)
-        return
-      }
       toast.success('Mietvertrag erstellt — Daten gespeichert')
       onOpenChange(false)
       router.push(`/documents/${document.id}`)

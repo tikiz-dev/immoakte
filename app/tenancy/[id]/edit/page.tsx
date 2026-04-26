@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { useAuth } from '@/contexts/AuthContext'
+import { getTenancy, updateTenancy } from '@/lib/local-store'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -14,7 +14,6 @@ import { ArrowLeft, Loader2 } from 'lucide-react'
 export default function EditTenancy() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
-  const { user } = useAuth()
   const [loading, setLoading] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
 
@@ -35,37 +34,26 @@ export default function EditTenancy() {
   })
 
   useEffect(() => {
-    if (!user) { router.replace('/login'); return }
-    fetch(`/api/tenancies/${id}`)
-      .then(r => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`)
-        return r.json()
-      })
-      .then(({ tenancy, error }) => {
-        if (error || !tenancy) { toast.error('Nicht gefunden'); router.push('/dashboard'); return }
-        const prop = tenancy.properties
-        setForm({
-          tenant_salutation: tenancy.tenant_salutation || 'Herr',
-          tenant_first_name: tenancy.tenant_first_name || '',
-          tenant_last_name: tenancy.tenant_last_name || '',
-          tenant_email: tenancy.tenant_email || '',
-          tenant_phone: tenancy.tenant_phone || '',
-          tenant_street: tenancy.tenant_street || '',
-          tenant_house_number: tenancy.tenant_house_number || '',
-          tenant_zip_code: tenancy.tenant_zip_code || '',
-          tenant_city: tenancy.tenant_city || '',
-          street: prop?.street || '',
-          house_number: prop?.house_number || '',
-          zip_code: prop?.zip_code || '',
-          city: prop?.city || '',
-        })
-        setInitialLoading(false)
-      })
-      .catch(() => {
-        toast.error('Daten konnten nicht geladen werden')
-        router.push('/dashboard')
-      })
-  }, [id, user])
+    const tenancy = getTenancy(id)
+    if (!tenancy) { toast.error('Nicht gefunden'); router.push('/dashboard'); return }
+    const prop = tenancy.properties
+    setForm({
+      tenant_salutation: tenancy.tenant_salutation || 'Herr',
+      tenant_first_name: tenancy.tenant_first_name || '',
+      tenant_last_name: tenancy.tenant_last_name || '',
+      tenant_email: tenancy.tenant_email || '',
+      tenant_phone: tenancy.tenant_phone || '',
+      tenant_street: tenancy.tenant_street || '',
+      tenant_house_number: tenancy.tenant_house_number || '',
+      tenant_zip_code: tenancy.tenant_zip_code || '',
+      tenant_city: tenancy.tenant_city || '',
+      street: prop?.street || '',
+      house_number: prop?.house_number || '',
+      zip_code: prop?.zip_code || '',
+      city: prop?.city || '',
+    })
+    setInitialLoading(false)
+  }, [id])
 
   const set = (key: string, value: string) => setForm(f => ({ ...f, [key]: value }))
 
@@ -73,13 +61,8 @@ export default function EditTenancy() {
     e.preventDefault()
     setLoading(true)
     try {
-      const res = await fetch(`/api/tenancies/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      })
-      const { error } = await res.json()
-      if (error) throw new Error(error)
+      const ok = updateTenancy(id, form)
+      if (!ok) throw new Error('Nicht gefunden')
       toast.success('Änderungen gespeichert')
       router.push(`/tenancy/${id}`)
     } catch (err: any) {

@@ -49,26 +49,24 @@ export default function Datenschutz() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-foreground mb-3">4. Eingesetzte Drittdienstleister</h2>
-
-            <h3 className="font-semibold mt-4 mb-1">Supabase (Datenbank & Authentifizierung)</h3>
+            <h2 className="text-xl font-semibold text-foreground mb-3">4. Lokale Speicherung &amp; Drittdienstleister</h2>
             <p>
-              Wir nutzen Supabase (Supabase Inc., 970 Trestle Glen Rd, Oakland, CA 94610, USA) zur Speicherung von Nutzer-, Protokoll- und Dokumentdaten sowie zur Authentifizierung. Unsere Datenbank-Instanz ist in der Region <strong>Central EU (Frankfurt am Main)</strong> gehostet – sämtliche Inhaltsdaten verbleiben innerhalb der EU. Mit Supabase haben wir einen Auftragsverarbeitungsvertrag nach Art. 28 DSGVO geschlossen. Datenschutzerklärung: <a href="https://supabase.com/privacy" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">supabase.com/privacy</a>
+              ImmoAkte ist in der aktuellen Version eine reine Browser-Anwendung.
+              Sämtliche Inhaltsdaten (Mietverhältnisse, Protokolle, Dokumente,
+              Vorlagen, Stammdaten) werden ausschließlich im{' '}
+              <strong>localStorage Ihres Browsers</strong> gespeichert. Es findet
+              <strong> keine Übertragung an Dritte</strong> statt: kein
+              Authentifizierungsanbieter, keine Datenbank, kein Zahlungsdienstleister,
+              kein Tracking. Ein Auftragsverarbeitungsvertrag nach Art. 28 DSGVO
+              ist daher nicht erforderlich, da keine personenbezogenen Daten an
+              Auftragsverarbeiter übermittelt werden.
             </p>
-
-            <h3 className="font-semibold mt-4 mb-1">Vercel (Hosting)</h3>
+            <h3 className="font-semibold mt-4 mb-1">Vercel (Hosting der statischen Anwendung)</h3>
             <p>
-              Die Plattform wird bei Vercel Inc. (340 S Lemon Ave #4133, Walnut, CA 91789, USA) gehostet. Unsere Serverless-Funktionen sind auf die Region <strong>Frankfurt am Main (fra1)</strong> festgelegt – Anfragen und deren Verarbeitung erfolgen also innerhalb der EU. Vercel verarbeitet dabei technische Zugriffsdaten (IP-Adresse, Zeitstempel, User-Agent). Mit Vercel haben wir einen Auftragsverarbeitungsvertrag nach Art. 28 DSGVO geschlossen. Datenschutzerklärung: <a href="https://vercel.com/legal/privacy-policy" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">vercel.com/legal/privacy-policy</a>
-            </p>
-
-            <h3 className="font-semibold mt-4 mb-1">Stripe (Zahlungsabwicklung)</h3>
-            <p>
-              Zahlungen werden über Stripe Payments Europe, Ltd., 1 Grand Canal Street Lower, Grand Canal Dock, Dublin, D02 H210, Irland, abgewickelt. Stripe verarbeitet Zahlungsdaten eigenverantwortlich. Wir erhalten nur eine Bestätigung über erfolgreiche Zahlungen. Datenschutzerklärung: <a href="https://stripe.com/de/privacy" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">stripe.com/de/privacy</a>
-            </p>
-
-            <h3 className="font-semibold mt-4 mb-1">Google OAuth (Anmeldung)</h3>
-            <p>
-              Alternativ zur E-Mail-Registrierung kann die Anmeldung per Google-Konto erfolgen. Dabei werden Name und E-Mail-Adresse von Google übermittelt. Anbieter: Google Ireland Limited, Gordon House, Barrow Street, Dublin 4, Irland. Datenschutzerklärung: <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">policies.google.com/privacy</a>
+              Die statische Web-App wird bei Vercel Inc. ausgeliefert. Beim Aufruf
+              werden technische Zugriffsdaten (IP-Adresse, Zeitstempel, User-Agent)
+              kurzzeitig verarbeitet. Inhaltsdaten verlassen den Browser nicht.
+              Datenschutzerklärung: <a href="https://vercel.com/legal/privacy-policy" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">vercel.com/legal/privacy-policy</a>
             </p>
           </section>
 

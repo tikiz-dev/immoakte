@@ -2,15 +2,17 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
-import { createClient } from '@/lib/supabase/client'
+import {
+  listTenancies, listAllProtocols, deleteProtocol as storeDeleteProtocol,
+  duplicateTenancyForAuszug, getProfile, saveProfile, exportAllData,
+} from '@/lib/local-store'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Logo } from '@/components/brand/Logo'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import {
-  Plus, LogOut, Settings, ShieldCheck, FileText, Archive, Bookmark,
-  CircleCheck, Clock, Search, Download,
+  Plus, Settings, Archive, Bookmark,
+  CircleCheck, Clock, Search, Download, RefreshCw,
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
@@ -18,19 +20,18 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
 import { TenancyCard } from '@/components/dashboard/TenancyCard'
-import { DeleteAccountDialog } from '@/components/account/DeleteAccountDialog'
 import { cn } from '@/lib/utils'
 
 interface Protocol {
   id: string
-  tenant_first_name?: string
-  tenant_last_name?: string
-  tenant_salutation?: string
-  tenant_email?: string
-  date: string | null
+  tenant_first_name?: string | null
+  tenant_last_name?: string | null
+  tenant_salutation?: string | null
+  tenant_email?: string | null
+  date?: string | null
   type: string
   status: string
-  property_id: string
+  property_id?: string | null
   propertyAddress?: string
   linked_protocol_id?: string | null
   finalized_at?: string | null
@@ -57,9 +58,8 @@ interface TenancyGroup {
 type FilterMode = 'all' | 'active' | 'closed'
 
 export default function Dashboard() {
-  const { user, isAdmin, logout } = useAuth()
+  const { user, resetLocalData } = useAuth()
   const router = useRouter()
-  const supabase = createClient()
 
   const [tenancies, setTenancies] = useState<TenancyGroup[]>([])
   const [loading, setLoading] = useState(true)
@@ -74,46 +74,32 @@ export default function Dashboard() {
   const [userIban, setUserIban] = useState('')
   const [userBankName, setUserBankName] = useState('')
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [isResetDialogOpen, setIsResetDialogOpen] = useState(false)
   const [protocolToDelete, setProtocolToDelete] = useState<string | null>(null)
-  const [unresolvedFeedbackCount, setUnresolvedFeedbackCount] = useState(0)
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [filter, setFilter] = useState<FilterMode>('all')
   const [search, setSearch] = useState('')
 
   useEffect(() => {
-    if (!user) { router.replace('/login'); return }
+    if (!user) return
     fetchData()
-  }, [user, isAdmin])
+  }, [user])
 
   const fetchData = async () => {
-    const { data: profile } = await supabase
-      .from('users').select('name, company, street, house_number, zip_code, city, phone, email_contact, iban, bank_name').eq('id', user!.id).single()
-    if (profile) {
-      setUserName(profile.name || '')
-      setUserCompany(profile.company || '')
-      setUserStreet(profile.street || '')
-      setUserHouseNumber(profile.house_number || '')
-      setUserZipCode(profile.zip_code || '')
-      setUserCity(profile.city || '')
-      setUserPhone(profile.phone || '')
-      setUserEmailContact(profile.email_contact || '')
-      setUserIban(profile.iban || '')
-      setUserBankName(profile.bank_name || '')
-    }
+    const profile = getProfile()
+    setUserName(profile.name || '')
+    setUserCompany(profile.company || '')
+    setUserStreet(profile.street || '')
+    setUserHouseNumber(profile.house_number || '')
+    setUserZipCode(profile.zip_code || '')
+    setUserCity(profile.city || '')
+    setUserPhone(profile.phone || '')
+    setUserEmailContact(profile.email_contact || '')
+    setUserIban(profile.iban || '')
+    setUserBankName(profile.bank_name || '')
 
-    if (isAdmin) {
-      const { count } = await supabase
-        .from('feedback').select('*', { count: 'exact', head: true }).eq('status', 'new')
-      setUnresolvedFeedbackCount(count || 0)
-    }
-
-    const [tenanciesRes, protocolsRes] = await Promise.all([
-      fetch('/api/tenancies').then(r => r.json()),
-      supabase.from('protocols').select('*').eq('owner_id', user!.id).order('created_at', { ascending: false }),
-    ])
-
-    const fetchedTenancies = tenanciesRes.tenancies || []
-    const fetchedProtocols = protocolsRes.data || []
+    const fetchedTenancies = listTenancies()
+    const fetchedProtocols = listAllProtocols()
 
     const groups: TenancyGroup[] = fetchedTenancies.map((t: any) => {
       const prop = t.properties
@@ -143,8 +129,8 @@ export default function Dashboard() {
     setLoading(false)
   }
 
-  const saveSettings = async () => {
-    const { error } = await supabase.from('users').update({
+  const saveSettings = () => {
+    saveProfile({
       name: userName,
       company: userCompany,
       street: userStreet,
@@ -155,9 +141,9 @@ export default function Dashboard() {
       email_contact: userEmailContact,
       iban: userIban,
       bank_name: userBankName,
-    }).eq('id', user!.id)
-    if (error) toast.error('Fehler beim Speichern')
-    else { toast.success('Stammdaten gespeichert'); setIsSettingsOpen(false) }
+    })
+    toast.success('Stammdaten gespeichert')
+    setIsSettingsOpen(false)
   }
 
   const confirmDelete = (protocolId: string) => {
@@ -165,10 +151,10 @@ export default function Dashboard() {
     setIsDeleteDialogOpen(true)
   }
 
-  const executeDelete = async () => {
+  const executeDelete = () => {
     if (!protocolToDelete) return
-    const { error } = await supabase.from('protocols').delete().eq('id', protocolToDelete)
-    if (error) { toast.error('Fehler beim Löschen'); return }
+    const ok = storeDeleteProtocol(protocolToDelete)
+    if (!ok) { toast.error('Fehler beim Löschen'); return }
     toast.success('Protokoll gelöscht')
     setTenancies(prev =>
       prev.map(g => {
@@ -185,17 +171,42 @@ export default function Dashboard() {
   const duplicateTenancy = async (group: TenancyGroup) => {
     toast.loading('Mietverhältnis wird dupliziert...', { id: 'dup' })
     try {
-      const res = await fetch('/api/duplicate-tenancy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tenancyId: group.tenancyId || group.id, einzugId: group.einzug?.id, auszugId: group.auszug?.id }),
-      })
-      if (!res.ok) throw new Error()
+      const tenancyId = group.tenancyId || group.id
+      const sourceProtocolId = group.einzug?.id
+      if (!sourceProtocolId) throw new Error('Kein Einzugsprotokoll vorhanden')
+      const result = duplicateTenancyForAuszug(tenancyId, sourceProtocolId)
+      if (!result) throw new Error('Duplikation fehlgeschlagen')
       toast.success('Mietverhältnis dupliziert', { id: 'dup' })
       window.location.reload()
-    } catch {
-      toast.error('Fehler beim Duplizieren', { id: 'dup' })
+    } catch (e: any) {
+      toast.error(e?.message || 'Fehler beim Duplizieren', { id: 'dup' })
     }
+  }
+
+  const downloadExport = () => {
+    try {
+      const data = exportAllData()
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `immoakte-export-${new Date().toISOString().slice(0, 10)}.json`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+      toast.success('Export wurde heruntergeladen.')
+    } catch (err: any) {
+      toast.error(err?.message || 'Fehler beim Export')
+    }
+  }
+
+  const handleResetLocal = () => {
+    resetLocalData()
+    setIsResetDialogOpen(false)
+    setIsSettingsOpen(false)
+    toast.success('Lokale Daten wurden zurückgesetzt.')
+    window.location.reload()
   }
 
   const stats = useMemo(() => {
@@ -228,7 +239,7 @@ export default function Dashboard() {
 
   if (!user) return null
 
-  const displayName = userName || user?.email?.split('@')[0] || ''
+  const displayName = userName || 'Vermieter'
   const firstName = displayName.split(/\s+/)[0]
 
   return (
@@ -252,18 +263,6 @@ export default function Dashboard() {
           </div>
 
           <div className="flex items-center gap-1">
-            {isAdmin && (
-              <div className="relative">
-                <Button variant="ghost" size="icon" title="Admin" onClick={() => router.push('/admin')}>
-                  <ShieldCheck className="h-4 w-4 text-brass-600" />
-                </Button>
-                {unresolvedFeedbackCount > 0 && (
-                  <span className="absolute top-0.5 right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-background">
-                    {unresolvedFeedbackCount}
-                  </span>
-                )}
-              </div>
-            )}
             <Button variant="ghost" size="icon" title="Eigene Vorlagen" onClick={() => router.push('/templates')}>
               <Bookmark className="h-4 w-4" />
             </Button>
@@ -337,68 +336,45 @@ export default function Dashboard() {
 
                   <Button onClick={saveSettings} className="w-full h-10">Speichern</Button>
 
-                  {/* DSGVO Art. 15 + 20 — Auskunft und Datenportabilität */}
                   <div className="pt-6 mt-4 border-t border-border">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-brass-600 mb-2">
                       Datenexport
                     </p>
                     <p className="text-xs text-muted-foreground leading-relaxed mb-3">
-                      Lädt alle personenbezogenen Daten, die wir über Sie speichern,
-                      als strukturierte JSON-Datei herunter
-                      (Art. 15 &amp; 20 DSGVO).
+                      Lädt alle lokal gespeicherten Daten als JSON-Datei herunter.
                     </p>
-                    <Button
-                      variant="outline"
-                      className="w-full h-10"
-                      onClick={async () => {
-                        try {
-                          const res = await fetch('/api/account/export')
-                          if (!res.ok) throw new Error('Export fehlgeschlagen')
-                          const blob = await res.blob()
-                          const url = URL.createObjectURL(blob)
-                          const a = document.createElement('a')
-                          a.href = url
-                          a.download = `immoakte-datenexport-${new Date().toISOString().slice(0, 10)}.json`
-                          document.body.appendChild(a)
-                          a.click()
-                          a.remove()
-                          URL.revokeObjectURL(url)
-                          toast.success('Export wurde heruntergeladen.')
-                        } catch (err: any) {
-                          toast.error(err.message || 'Fehler beim Export')
-                        }
-                      }}
-                    >
+                    <Button variant="outline" className="w-full h-10" onClick={downloadExport}>
                       <Download className="h-4 w-4 mr-2" />
                       Meine Daten herunterladen
                     </Button>
                   </div>
 
-                  {/* DSGVO Art. 17 — Recht auf Löschung (Danger Zone) */}
                   <div className="pt-6 mt-4 border-t border-border">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-destructive mb-2">
-                      Konto löschen
+                      Lokale Daten zurücksetzen
                     </p>
                     <p className="text-xs text-muted-foreground leading-relaxed mb-3">
-                      Löscht Ihr Konto und alle zugehörigen Daten (Mietverhältnisse,
-                      Dokumente, Protokolle) unwiderruflich. Diese Aktion kann nicht
-                      rückgängig gemacht werden.
+                      Löscht alle Mietverhältnisse, Protokolle, Dokumente und Vorlagen aus dem Browser. Diese Aktion kann nicht rückgängig gemacht werden.
                     </p>
-                    {user?.email && <DeleteAccountDialog userEmail={user.email} />}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full h-9 text-destructive border-destructive/30 hover:bg-destructive/10"
+                      onClick={() => setIsResetDialogOpen(true)}
+                    >
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Lokale Daten zurücksetzen
+                    </Button>
                   </div>
                 </div>
               </DialogContent>
             </Dialog>
             <ThemeToggle compact />
-            <Button variant="ghost" size="icon" onClick={logout} title="Abmelden">
-              <LogOut className="h-4 w-4" />
-            </Button>
           </div>
         </div>
       </header>
 
       <main className="mx-auto mt-10 max-w-6xl px-4 sm:px-6 motion-page-in">
-        {/* Greeting */}
         <div className="mb-8">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-brass-600 mb-2">
             Willkommen zurück
@@ -411,38 +387,15 @@ export default function Dashboard() {
           </p>
         </div>
 
-        {/* Bento stats — auf Mobile untereinander (ein-Spalten-Stack statt 2+1-Asymmetrie) */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-10">
-          <StatCard
-            label="Mietverhältnisse"
-            value={stats.total}
-            icon={Archive}
-            tone="ink"
-            loading={loading}
-            style={{ '--stagger-i': 0 } as React.CSSProperties}
-            className="motion-fade-up"
-          />
-          <StatCard
-            label="Aktiv"
-            value={stats.active}
-            icon={Clock}
-            tone="brass"
-            loading={loading}
-            style={{ '--stagger-i': 1 } as React.CSSProperties}
-            className="motion-fade-up"
-          />
-          <StatCard
-            label="Abgeschlossen"
-            value={stats.closed}
-            icon={CircleCheck}
-            tone="emerald"
-            loading={loading}
-            className="motion-fade-up"
-            style={{ '--stagger-i': 2 } as React.CSSProperties}
-          />
+          <StatCard label="Mietverhältnisse" value={stats.total} icon={Archive} tone="ink" loading={loading}
+            style={{ '--stagger-i': 0 } as React.CSSProperties} className="motion-fade-up" />
+          <StatCard label="Aktiv" value={stats.active} icon={Clock} tone="brass" loading={loading}
+            style={{ '--stagger-i': 1 } as React.CSSProperties} className="motion-fade-up" />
+          <StatCard label="Abgeschlossen" value={stats.closed} icon={CircleCheck} tone="emerald" loading={loading}
+            className="motion-fade-up" style={{ '--stagger-i': 2 } as React.CSSProperties} />
         </div>
 
-        {/* Toolbar: title + action + filters */}
         <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-5">
           <div>
             <h2 className="font-heading text-2xl text-foreground">Meine Akten</h2>
@@ -457,7 +410,6 @@ export default function Dashboard() {
           </Button>
         </div>
 
-        {/* Filter + search row */}
         {tenancies.length > 0 && (
           <div className="flex flex-col sm:flex-row gap-3 mb-6">
             <div className="flex items-center gap-1 p-1 rounded-xl bg-muted/60 border border-border w-fit">
@@ -466,40 +418,28 @@ export default function Dashboard() {
                 { k: 'active' as const, label: 'Aktiv',         count: stats.active },
                 { k: 'closed' as const, label: 'Abgeschlossen', count: stats.closed },
               ].map(({ k, label, count }) => (
-                <button
-                  key={k}
-                  onClick={() => setFilter(k)}
+                <button key={k} onClick={() => setFilter(k)}
                   className={cn(
                     'px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-2',
-                    filter === k
-                      ? 'bg-card text-foreground shadow-xs'
-                      : 'text-muted-foreground hover:text-foreground'
-                  )}
-                >
+                    filter === k ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'
+                  )}>
                   {label}
                   <span className={cn(
                     'text-[11px] rounded-full px-1.5 h-4 min-w-[16px] inline-flex items-center justify-center',
                     filter === k ? 'bg-brass-100 text-brass-800 dark:bg-brass-900/40 dark:text-brass-200' : 'bg-background text-muted-foreground'
-                  )}>
-                    {count}
-                  </span>
+                  )}>{count}</span>
                 </button>
               ))}
             </div>
             <div className="relative flex-1 max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-              <input
-                type="text"
-                placeholder="Mieter oder Adresse suchen…"
-                value={search}
+              <input type="text" placeholder="Mieter oder Adresse suchen…" value={search}
                 onChange={e => setSearch(e.target.value)}
-                className="w-full h-10 pl-9 pr-3 rounded-xl bg-card border border-border text-sm placeholder:text-muted-foreground focus:outline-none focus:border-brass-400 focus:ring-2 focus:ring-brass-400/20 transition-colors"
-              />
+                className="w-full h-10 pl-9 pr-3 rounded-xl bg-card border border-border text-sm placeholder:text-muted-foreground focus:outline-none focus:border-brass-400 focus:ring-2 focus:ring-brass-400/20 transition-colors" />
             </div>
           </div>
         )}
 
-        {/* Content */}
         {loading ? (
           <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
             {[0, 1, 2].map(i => (
@@ -521,9 +461,7 @@ export default function Dashboard() {
           <EmptyState onCreate={() => router.push('/tenancy/new')} />
         ) : filtered.length === 0 ? (
           <div className="text-center py-16">
-            <p className="text-muted-foreground">
-              Keine Treffer für die aktuelle Auswahl.
-            </p>
+            <p className="text-muted-foreground">Keine Treffer für die aktuelle Auswahl.</p>
             <Button variant="ghost" onClick={() => { setFilter('all'); setSearch('') }} className="mt-3">
               Filter zurücksetzen
             </Button>
@@ -531,11 +469,8 @@ export default function Dashboard() {
         ) : (
           <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
             {filtered.map((group, idx) => (
-              <div
-                key={group.id}
-                className="motion-fade-up hover-lift"
-                style={{ '--stagger-i': idx } as React.CSSProperties}
-              >
+              <div key={group.id} className="motion-fade-up hover-lift"
+                style={{ '--stagger-i': idx } as React.CSSProperties}>
                 <TenancyCard
                   group={group}
                   userId={user.id}
@@ -546,9 +481,7 @@ export default function Dashboard() {
                     if (tenancyId) router.push(`/tenancy/${tenancyId}`)
                   }}
                   onAuszugCreated={(auszug) => {
-                    setTenancies(prev => prev.map(g =>
-                      g.id === group.id ? { ...g, auszug } : g
-                    ))
+                    setTenancies(prev => prev.map(g => g.id === group.id ? { ...g, auszug } : g))
                   }}
                 />
               </div>
@@ -571,11 +504,24 @@ export default function Dashboard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={isResetDialogOpen} onOpenChange={setIsResetDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Lokale Daten zurücksetzen?</DialogTitle>
+            <DialogDescription>
+              Alle Mietverhältnisse, Protokolle, Dokumente und Vorlagen werden aus dem Browser entfernt. Diese Aktion kann nicht rückgängig gemacht werden.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsResetDialogOpen(false)}>Abbrechen</Button>
+            <Button variant="destructive" onClick={handleResetLocal}>Zurücksetzen</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
-
-/* ---- local helpers ---- */
 
 function StatCard({
   label, value, icon: Icon, tone, loading, className, style,
@@ -619,22 +565,17 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
     <div className="relative overflow-hidden rounded-3xl border border-dashed border-border bg-gradient-to-br from-muted/50 to-background py-20 px-6 text-center">
       <div className="absolute inset-0 bg-ledger opacity-40 pointer-events-none" />
       <div className="relative">
-        {/* SVG illustration */}
         <div className="mx-auto w-40 h-28 mb-6">
           <svg viewBox="0 0 160 110" className="w-full h-full" aria-hidden="true">
-            {/* Archive shelf */}
             <rect x="10" y="20" width="140" height="80" rx="4" fill="#faf0d9" stroke="#e9c775" strokeWidth="1" />
             <line x1="10" y1="55" x2="150" y2="55" stroke="#c9974b" strokeWidth="1" opacity="0.4" />
-            {/* Folders */}
             <rect x="22" y="28" width="22" height="22" rx="2" fill="#1e2a47" />
             <rect x="48" y="28" width="22" height="22" rx="2" fill="#394669" />
             <rect x="74" y="28" width="22" height="22" rx="2" fill="#c9974b" />
             <rect x="100" y="28" width="22" height="22" rx="2" fill="#78716c" opacity="0.6" />
-            {/* lower shelf - empty */}
             <rect x="22" y="62" width="22" height="22" rx="2" fill="none" stroke="#d4cec2" strokeWidth="1" strokeDasharray="2 2" />
             <rect x="48" y="62" width="22" height="22" rx="2" fill="none" stroke="#d4cec2" strokeWidth="1" strokeDasharray="2 2" />
             <rect x="74" y="62" width="22" height="22" rx="2" fill="none" stroke="#d4cec2" strokeWidth="1" strokeDasharray="2 2" />
-            {/* Arrow suggesting action */}
             <path d="M 80 95 L 80 105 M 76 101 L 80 105 L 84 101" stroke="#c9974b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
           </svg>
         </div>

@@ -8,6 +8,7 @@ import {
   type SectionsContent,
 } from '@/lib/document-templates'
 import { embedSignaturesInHtml, generateDocumentPdf } from '@/lib/document-pdf'
+import { getDocument, updateDocument, deleteDocument, createTemplate } from '@/lib/local-store'
 
 /** Minimal fields we rely on from the `documents` row. */
 export interface DocumentRecord {
@@ -56,27 +57,20 @@ export function useDocument(id: string, authed: boolean) {
 
   // ─── Load on mount ─────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!authed) { router.replace('/login'); return }
-    const ctrl = new AbortController()
-    fetch(`/api/documents/${id}`, { signal: ctrl.signal })
-      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
-      .then(({ document, error }) => {
-        if (error) { toast.error('Dokument nicht gefunden'); router.replace('/dashboard'); return }
-        setDoc(document)
-        setName(document.name)
-        setContent(document.content)
-        if (isSectionsContent(document.content)) {
-          setParsedSections(parseSectionsContent(document.content))
-        }
-        setLoading(false)
-      })
-      .catch(err => {
-        if (err?.name === 'AbortError') return
-        toast.error('Dokument konnte nicht geladen werden')
-        router.replace('/dashboard')
-      })
-    return () => ctrl.abort()
-  }, [id, authed, router])
+    const document = getDocument(id)
+    if (!document) {
+      toast.error('Dokument nicht gefunden')
+      router.replace('/dashboard')
+      return
+    }
+    setDoc(document as DocumentRecord)
+    setName(document.name)
+    setContent(document.content)
+    if (isSectionsContent(document.content)) {
+      setParsedSections(parseSectionsContent(document.content))
+    }
+    setLoading(false)
+  }, [id, router])
 
   // ─── Edit callbacks (stable) ───────────────────────────────────────────────
   const changeName = useCallback((value: string) => {
@@ -125,12 +119,8 @@ export function useDocument(id: string, authed: boolean) {
         if (opts.signatureMode) updates.signature_mode = opts.signatureMode
         if (opts.signatures) updates.signatures = opts.signatures
       }
-      const res = await fetch(`/api/documents/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates),
-      })
-      if (!res.ok) throw new Error('save failed')
+      const updated = updateDocument(id, updates as any)
+      if (!updated) throw new Error('save failed')
 
       setIsDirty(false)
       if (opts?.contentOverride) setContent(opts.contentOverride)
@@ -178,8 +168,8 @@ export function useDocument(id: string, authed: boolean) {
 
   // ─── Delete ────────────────────────────────────────────────────────────────
   const remove = useCallback(async () => {
-    const res = await fetch(`/api/documents/${id}`, { method: 'DELETE' })
-    if (!res.ok) { toast.error('Fehler beim Löschen'); return false }
+    const ok = deleteDocument(id)
+    if (!ok) { toast.error('Fehler beim Löschen'); return false }
     toast.success('Dokument gelöscht')
     router.push('/dashboard')
     return true
@@ -203,16 +193,8 @@ export function useDocument(id: string, authed: boolean) {
   // ─── Save-as-template ──────────────────────────────────────────────────────
   const saveAsTemplate = useCallback(async (templateName: string) => {
     const { content: curContent } = stateRef.current
-    const res = await fetch('/api/templates', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: templateName, type: doc?.type, content: curContent }),
-    })
-    const { template, error } = await res.json()
-    if (error || !template) {
-      toast.error('Fehler: ' + (error || 'Unbekannt'))
-      throw new Error(error || 'Unbekannt')
-    }
+    if (!doc?.type) throw new Error('Kein Typ')
+    const template = createTemplate({ name: templateName, type: doc.type, content: curContent })
     toast.success(`Vorlage "${template.name}" gespeichert`)
   }, [doc?.type])
 

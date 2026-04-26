@@ -1,104 +1,45 @@
 'use client'
 
+/**
+ * AuthContext (slim version).
+ *
+ * Die App hat kein Login mehr — alles läuft lokal im Browser. Damit aber
+ * bestehende Komponenten, die `useAuth()` aufrufen, weiterhin compilen
+ * und sinnvolle Werte bekommen, exposen wir hier eine schmale Fassade,
+ * die einen synthetischen Lokal-User aus `localStorage` liefert.
+ */
+
 import React, { createContext, useContext, useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
-import type { User } from '@supabase/supabase-js'
+import { getOrCreateUser, wipeAllData, type LocalUser } from '@/lib/local-store'
 
 interface AuthContextType {
-  user: User | null
+  user: LocalUser | null
   isAdmin: boolean
   loading: boolean
-  signInWithGoogle: () => Promise<void>
-  signInWithEmail: (email: string, password: string) => Promise<void>
-  signUpWithEmail: (email: string, password: string, name: string) => Promise<void>
-  logout: () => Promise<void>
+  /** Setzt alle Browser-Daten zurück (vorher: Account-Löschung). */
+  resetLocalData: () => void
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null)
-  const [isAdmin, setIsAdmin] = useState(false)
+  const [user, setUser] = useState<LocalUser | null>(null)
   const [loading, setLoading] = useState(true)
-  const supabase = createClient()
 
   useEffect(() => {
-    const checkAdmin = async (currentUser: User | null) => {
-      if (!currentUser) return false
-      const { data: profile } = await supabase
-        .from('users')
-        .select('role')
-        .eq('id', currentUser.id)
-        .single()
-      return profile?.role === 'admin'
-    }
-
-    // Load initial session immediately
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      const currentUser = session?.user ?? null
-      setUser(currentUser)
-      setIsAdmin(await checkAdmin(currentUser))
-    }).catch(() => {}).finally(() => {
-      setLoading(false)
-    })
-
-    // Listen for subsequent auth changes (login, logout, token refresh)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      const currentUser = session?.user ?? null
-      setUser(currentUser)
-      checkAdmin(currentUser).then(setIsAdmin).catch(() => setIsAdmin(false))
-      setLoading(false)
-    })
-
-    return () => subscription.unsubscribe()
+    // Erst nach Hydration den User aus localStorage holen — sonst bekommen
+    // SSR und Client unterschiedliche IDs und React beschwert sich.
+    setUser(getOrCreateUser())
+    setLoading(false)
   }, [])
 
-  const signInWithGoogle = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/dashboard`,
-      },
-    })
-    if (error) throw error
-  }
-
-  const signInWithEmail = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) throw error
-  }
-
-  const signUpWithEmail = async (email: string, password: string, name: string) => {
-    // terms_accepted_at: Zeitstempel der AGB/Datenschutz-Zustimmung (Art. 7 DSGVO
-    // verlangt Nachweisbarkeit). Wird in auth.users.raw_user_meta_data persistiert
-    // und kann bei Bedarf vom DB-Trigger `handle_new_user` in die users-Tabelle
-    // kopiert werden.
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          name,
-          terms_accepted_at: new Date().toISOString(),
-          terms_version: '2026-04-15',
-        },
-        emailRedirectTo: `${window.location.origin}/login`,
-      },
-    })
-    if (error) throw error
-    // Supabase sends confirmation email automatically.
-    // The DB trigger `handle_new_user` creates the profile.
-    // Sign out so user must confirm email first.
-    await supabase.auth.signOut()
-  }
-
-  const logout = async () => {
-    const { error } = await supabase.auth.signOut()
-    if (error) throw error
+  const resetLocalData = () => {
+    wipeAllData()
+    setUser(getOrCreateUser())
   }
 
   return (
-    <AuthContext.Provider value={{ user, isAdmin, loading, signInWithGoogle, signInWithEmail, signUpWithEmail, logout }}>
+    <AuthContext.Provider value={{ user, isAdmin: false, loading, resetLocalData }}>
       {children}
     </AuthContext.Provider>
   )

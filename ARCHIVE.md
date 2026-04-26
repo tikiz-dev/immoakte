@@ -237,5 +237,182 @@ Wenn Öz (oder jemand anderes) das Projekt wieder aufgreifen will:
 
 ---
 
+---
+
+## 12. Technische Konservierung — was beim Mothballing entfernt wird
+
+Im April 2026 wurde die Live-Variante so umgebaut, dass sie **ohne Supabase
+und ohne Stripe** läuft (alle Daten im Browser-Cache). Damit ein späterer
+Restart nicht von vorne raten muss, hier alles, was rausgeflogen ist:
+
+### 12.1 Environment-Variablen (Original-Setup vor Mothball)
+
+```env
+# Supabase (entfernt)
+NEXT_PUBLIC_SUPABASE_URL=https://<project>.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key>
+SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
+
+# Stripe (entfernt)
+STRIPE_SECRET_KEY=sk_live_… / sk_test_…
+STRIPE_WEBHOOK_SECRET=whsec_…
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_… / pk_test_…
+
+# Stripe-Preis-IDs (in DEINEM Stripe-Dashboard angelegt — IDs hier nie eingecheckt)
+NEXT_PUBLIC_STRIPE_PRICE_ONDEMAND=price_…   # 9,99 € einmalig pro Protokoll
+NEXT_PUBLIC_STRIPE_PRICE_10PACK=price_…     # 19,99 €/Monat, 10 Protokolle
+NEXT_PUBLIC_STRIPE_PRICE_50PACK=price_…     # 39,99 €/Monat, 50 Protokolle
+
+# Gemini (für KI-Features wie OCR-Zähler — war geplant, nie ausgerollt)
+GEMINI_API_KEY=…
+```
+
+### 12.2 Pricing-Modell, das in `app/pricing/page.tsx` live war
+
+| Plan | Preis | Stripe-Mode | Inhalt |
+|---|---|---|---|
+| **Gratis** | 0 € | — (kein Checkout) | 1 Protokoll abschließen, alle Vorlagen lesen |
+| **Flex** | 9,99 € | `payment` (einmalig) | 1 Protokoll on-demand, kein Abo |
+| **Standard** *(meistgewählt)* | 19,99 €/Monat | `subscription` | 10 Protokolle/Monat, alle Vorlagen, monatlich kündbar |
+| **Pro** | 39,99 €/Monat | `subscription` | 50 Protokolle/Monat, Prioritäts-Support |
+| **Enterprise** | individuell | mailto: hallo@immoakte.app | > 50 Protokolle, Onboarding |
+
+Alle Pläne enthielten: Mietverhältnisse verwalten, Einzugs-/Auszugsprotokolle,
+PDF-Export, digitale Unterschriften beider Parteien, Fotos & Zählerstände.
+
+### 12.3 Stripe-Checkout-Flow (Compliance war eingebaut)
+
+1. Nutzer klickt Plan → `CheckoutConfirmDialog` öffnet (Button-Lösung § 312j BGB)
+2. Nutzer bestätigt **AGB**, **Widerrufsbelehrung**, **Widerrufsverzicht** (§ 356 Abs. 5 BGB)
+3. POST `/api/stripe/checkout` → Stripe-Session mit `customer_email`, `metadata.userId`, ggf. `metadata.protocolId`
+4. Redirect auf Stripe Checkout
+5. Webhook `/api/stripe/webhook` empfängt `checkout.session.completed`:
+   - `subscription` → `users.subscription_status = 'active'`, `users.stripe_customer_id` setzen
+   - `payment` mit `protocolId` → einzelnes Protokoll auf `final` setzen
+6. `customer.subscription.deleted` → `subscription_status = 'cancelled'`
+
+Beta-Mode-Schalter: `app_settings.beta_mode = 'true'` ließ alle Checkouts
+auf `/beta` umleiten — fürs Pre-Launch-Marketing gedacht.
+
+### 12.4 Auth-Flow (Supabase Auth)
+
+- E-Mail+Passwort + Google OAuth (`signInWithOAuth({ provider: 'google' })`)
+- Cookie-basierte Session via `@supabase/ssr` Middleware (`middleware.ts` → `lib/supabase/middleware.ts`)
+- Bei Signup: `terms_accepted_at` in `raw_user_meta_data` → DB-Trigger `handle_new_user()` legt `users`-Profil an
+- Admin-Rolle: hardcoded für `info@weserbergland-dienstleistungen.de` im Trigger
+- Forgot-Password / Reset-Password Flow via Supabase Magic Link
+- Account-Löschung: `/api/account/delete` → `supabaseAdmin.auth.admin.deleteUser(userId)` (kaskadiert via `ON DELETE CASCADE`)
+- DSGVO-Export: `/api/account/export` → ZIP mit allen User-Daten
+
+### 12.5 Vollständiges DB-Schema (10 Migrations)
+
+Liegt in `supabase/migrations/001_initial.sql` … `010_document_signatures.sql`.
+**Kurzfassung der Tabellen:**
+
+```
+users               (id, email, name, company, role['user'|'admin'], stripe_customer_id,
+                     subscription_status, street, house_number, zip_code, city,
+                     phone, email_contact, iban, bank_name, created_at)
+properties          (id, owner_id→users, address, street, house_number, zip_code, city)
+tenancies           (id, owner_id, property_id, tenant_salutation/first/last/email/phone,
+                     tenant_street/house_number/zip_code/city,
+                     start_date, end_date,
+                     rent_cold, utilities, deposit, sqm, rooms, floor,
+                     contract_duration['unbefristet'|'befristet'], contract_end_date,
+                     notice_period_months, rent_due_day)
+protocols           (id, tenancy_id, property_id, owner_id, type['Einzug'|'Auszug'],
+                     status['draft'|'final'], date, finalized_at,
+                     tenant_salutation/first/last/email/phone, linked_protocol_id,
+                     rooms jsonb, meters jsonb, keys jsonb,
+                     general_condition, tenant_new_address, witnesses,
+                     landlord_signature, tenant_signature)
+documents           (id, owner_id, tenancy_id, protocol_id, property_id, template_id,
+                     name, type['wohnungsgeberbestaetigung'|'mietvertrag'|
+                              'kautionsbescheinigung'|'sonstiges'],
+                     content text, status['draft'|'final'], finalized_at, pdf_url,
+                     tenant_salutation/first/last/email,
+                     signature_mode['handwritten'|'digital'], signatures jsonb)
+document_templates  (id, owner_id, name, type, content, is_default)
+feedback            (id, user_id, type['bug'|'feature'|'error'], message, error_details,
+                     url, image_url, status['new'|'resolved'])
+app_settings        (key text PK, value text)   -- z.B. beta_mode='true'/'false'
+```
+
+**RLS-Pattern überall:** `owner_id = auth.uid()` — User sieht nur eigene Daten.
+**Admin-Bypass:** `public.is_admin()` als SECURITY DEFINER Function.
+
+**Storage-Buckets:**
+- `feedback` (public): Screenshots aus Bug-Reports
+- `protocol-images` (private, ab Migration 007): Fotos in Übergabeprotokollen, Pfad-Format `{user_id}/...`
+
+**Wichtige RPC-Function:**
+- `finalize_protocol(p_protocol_id, p_owner_id)` — atomar mit `FOR UPDATE`-Lock,
+  prüft ob User Abo hat (`subscription_status='active'`) ODER ob er sein
+  Gratis-Protokoll noch nicht verbraucht hat. Returnt `{error:'payment_required'}`
+  wenn Limit erreicht, sonst setzt `status='final'`.
+
+### 12.6 API-Routes (alle Supabase-/Stripe-gestützt)
+
+```
+GET    /api/health                      → einfacher Liveness-Check
+GET    /api/tenancies                   → alle Mietverhältnisse + Properties
+POST   /api/tenancies                   → neues Mietverhältnis + Property anlegen
+GET    /api/tenancies/[id]              → Detail + Protokolle + Dokumente
+PATCH  /api/tenancies/[id]              → Update mit strikter Allowlist (kein owner_id)
+DELETE /api/tenancies/[id]
+POST   /api/duplicate-tenancy           → Mietverhältnis klonen (für Auszug)
+GET    /api/documents                   → alle Dokumente, optional ?tenancy_id
+POST   /api/documents                   → neues Dokument
+GET    /api/documents/[id]
+PATCH  /api/documents/[id]
+DELETE /api/documents/[id]
+GET    /api/templates                   → eigene Templates, optional ?type
+POST   /api/templates
+PATCH  /api/templates/[id]
+DELETE /api/templates/[id]
+POST   /api/finalize                    → ruft RPC finalize_protocol
+POST   /api/protocol/save-pdf           → PDF nach Storage hochladen
+POST   /api/stripe/checkout             → Stripe Checkout Session
+POST   /api/stripe/webhook              → Stripe Webhook-Handler
+GET    /api/account/export              → DSGVO-Datenexport ZIP
+POST   /api/account/delete              → Account + alle Daten löschen
+GET    /api/admin/users                 → Admin: alle User
+PATCH  /api/admin/users
+GET    /api/admin/feedback
+PATCH  /api/admin/feedback
+GET    /api/admin/settings              → app_settings Tabelle
+PATCH  /api/admin/settings              → z.B. Beta-Mode an/aus
+```
+
+### 12.7 Komponenten/Pages, die rückbaubar sind
+
+- `app/login/page.tsx` — E-Mail/Passwort + Google-Login
+- `app/forgot-password/page.tsx` — Magic Link
+- `app/reset-password/page.tsx` — Passwort-Reset
+- `app/beta/page.tsx` — Pre-Launch-Wartelistenseite
+- `app/admin/page.tsx` — Admin-Dashboard (User, Feedback, Settings)
+- `app/feedback/page.tsx` — Bug-Report-Formular
+- `app/pricing/page.tsx` — siehe 12.2
+- `components/checkout/CheckoutConfirmDialog.tsx` — Compliance-Dialog vor Stripe
+- `components/account/DeleteAccountDialog.tsx` — DSGVO-Account-Löschung
+- `components/FeedbackButton.tsx` — Floating Bug-Report-Button
+- `contexts/AuthContext.tsx` — `useAuth()` Hook
+- `lib/supabase/{client,server,middleware}.ts` — SSR-Wrapper
+- `middleware.ts` — globaler Session-Refresh
+
+### 12.8 Restart-Anleitung (vom Mothball-Stand zurück zur Vollversion)
+
+1. **Supabase-Projekt anlegen**, alle Migrations aus `supabase/migrations/` einspielen
+2. `.env.local` mit allen 12.1 Variablen befüllen
+3. `npm install @supabase/ssr @supabase/supabase-js stripe @stripe/stripe-js`
+4. Aus dem Backup-Branch `lib/supabase/`, `contexts/AuthContext.tsx`, `middleware.ts`, `app/api/`, `app/login`, `app/admin`, `app/pricing`, `app/forgot-password`, `app/reset-password`, `app/beta`, `app/feedback`, `components/checkout/` zurückspielen
+5. Stripe-Produkte + Preise im Dashboard anlegen, IDs in env eintragen
+6. Stripe-Webhook auf `https://<deine-domain>/api/stripe/webhook` zeigen, Signing-Secret in env
+7. **Datenmigration:** ein Mini-Skript schreiben, das aus `localStorage` die JSON-Snapshots liest und in Supabase importiert (Felder mappen `tenancies`, `protocols`, `documents`, `document_templates`).
+
+> Backup vor dem Mothballing: liegt bei Öz lokal als Kopie (nicht im Repo).
+
+---
+
 *Letzter Eintrag: April 2026 — Öz, im Alleingang, beim Einstampfen.*
 *Wenn jemand das hier liest und das Ding wieder aufmacht: viel Glück.* 🍀
